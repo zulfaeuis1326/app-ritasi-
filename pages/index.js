@@ -20,6 +20,7 @@ export default function Home() {
   const [loadingClick, setLoadingClick] = useState(false);
   const [closing, setClosing] = useState(false);
   const [pastShifts, setPastShifts] = useState([]);
+  const [history, setHistory] = useState([]);
 
   const loadUnits = useCallback(async () => {
     const res = await fetch("/api/units");
@@ -50,13 +51,28 @@ export default function Home() {
     setPastShifts(data.filter((s) => s.status === "closed"));
   }, []);
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ritasi/history");
+      if (!res.ok) return;
+      const data = await res.json();
+      setHistory(data.clicks || []);
+    } catch (err) {
+      // diamkan — bukan bagian kritis, tidak perlu ganggu tampilan utama
+    }
+  }, []);
+
   useEffect(() => {
     loadUnits();
     loadRecap();
     loadPastShifts();
-    const poll = setInterval(loadRecap, 5000);
+    loadHistory();
+    const poll = setInterval(() => {
+      loadRecap();
+      loadHistory();
+    }, 5000);
     return () => clearInterval(poll);
-  }, [loadUnits, loadRecap, loadPastShifts]);
+  }, [loadUnits, loadRecap, loadPastShifts, loadHistory]);
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString("id-ID"));
@@ -81,10 +97,31 @@ export default function Home() {
       }
       const data = await res.json();
       setRecap(data);
+      loadHistory();
     } catch (err) {
       alert(`Gagal mencatat ritasi (koneksi/server bermasalah): ${err.message}`);
     } finally {
       setLoadingClick(false);
+    }
+  }
+
+  async function handleDeleteClick(clickId) {
+    if (!confirm("Hapus entri ritasi ini? Aksi ini untuk koreksi klik yang salah.")) return;
+    try {
+      const res = await fetch("/api/ritasi/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: clickId }),
+      });
+      if (res.ok) {
+        await loadRecap();
+        await loadHistory();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Gagal menghapus entri: ${data.error || res.status}`);
+      }
+    } catch (err) {
+      alert(`Gagal menghapus entri (koneksi/server bermasalah): ${err.message}`);
     }
   }
 
@@ -151,11 +188,18 @@ export default function Home() {
 
   return (
     <div className="container">
-      <div className="card">
+      <div className="card header-card">
+        <img
+          src="/logo.png"
+          alt="Logo"
+          className="app-logo"
+          onError={(e) => { e.target.style.display = "none"; }}
+        />
         <div className="clock">{clock}</div>
         <div className="shift-label">
           {recapError ? `Error: ${recapError}` : (recap?.shift?.label || "Memuat shift...")}
         </div>
+        {recap?.tzInfo && <div className="hint" style={{ textAlign: "center" }}>Zona waktu server: {recap.tzInfo}</div>}
       </div>
 
       <div className="card">
@@ -225,13 +269,18 @@ export default function Home() {
 
       <div className="card">
         <div className="section-title">Rekap Per Jam — Shift Berjalan</div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          Kolom jam <b>{String(recap?.currentHour ?? "").padStart(2, "0")}</b> (ditandai biru) adalah jam yang sedang berjalan saat ini.
+        </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Unit</th>
                 {recap?.hours?.map((h) => (
-                  <th key={h}>{String(h).padStart(2, "0")}</th>
+                  <th key={h} className={h === recap.currentHour ? "current-hour" : ""}>
+                    {String(h).padStart(2, "0")}
+                  </th>
                 ))}
                 <th>Total</th>
               </tr>
@@ -241,7 +290,9 @@ export default function Home() {
                 <tr key={u.id}>
                   <td style={{ fontWeight: 700 }}>{u.name}</td>
                   {u.hourly.map((h) => (
-                    <td key={h.jam}>{formatJamCell(h)}</td>
+                    <td key={h.jam} className={h.jam === recap.currentHour ? "current-hour" : ""}>
+                      {formatJamCell(h)}
+                    </td>
                   ))}
                   <td style={{ fontWeight: 700 }}>{u.total}</td>
                 </tr>
@@ -250,7 +301,9 @@ export default function Home() {
                 <tr className="total-row">
                   <td>TOTAL</td>
                   {recap.grandHourlyTotals?.map((v, i) => (
-                    <td key={i}>{v}</td>
+                    <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour" : ""}>
+                      {v}
+                    </td>
                   ))}
                   <td>{recap.grandTotal}</td>
                 </tr>
@@ -289,6 +342,25 @@ export default function Home() {
       </div>
 
       <div className="card">
+        <div className="section-title">Riwayat & Revisi Ritasi</div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          Salah pencet unit/material? Hapus entri yang salah di sini, lalu klik ulang yang benar.
+        </div>
+        {history.length === 0 && <div className="hint">Belum ada klik ritasi di shift ini.</div>}
+        {history.map((h) => (
+          <div key={h.id} className="history-row">
+            <div className="history-info">
+              <b>{h.unit_name}</b> — {h.material} — jam {String(h.jam).padStart(2, "0")}
+              <div className="hint">{new Date(h.clicked_at).toLocaleTimeString("id-ID")}</div>
+            </div>
+            <button className="btn-mini-danger" onClick={() => handleDeleteClick(h.id)}>
+              Hapus
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
         <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
           {closing ? "Menutup shift..." : "Tutup Shift & Export Excel"}
         </button>
@@ -310,4 +382,4 @@ export default function Home() {
       )}
     </div>
   );
-            }
+}
