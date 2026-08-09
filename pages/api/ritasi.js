@@ -5,32 +5,37 @@ const { nowParts } = require("../../lib/time");
 const { MATERIALS } = require("../../lib/materials");
 
 export default async function handler(req, res) {
-  await ensureSchema();
+  try {
+    await ensureSchema();
 
-  if (req.method === "POST") {
-    const { unitId, material } = req.body || {};
-    if (!unitId || !MATERIALS.includes(material)) {
-      return res.status(400).json({ error: "unitId dan material (valid) wajib diisi" });
+    if (req.method === "POST") {
+      const { unitId, material } = req.body || {};
+      if (!unitId || !MATERIALS.includes(material)) {
+        return res.status(400).json({ error: "unitId dan material (valid) wajib diisi" });
+      }
+
+      const shift = await getOrCreateOpenShift();
+      const jam = nowParts().hour;
+
+      await pool.query(
+        `INSERT INTO ritasi_clicks (unit_id, shift_id, material, jam) VALUES ($1, $2, $3, $4)`,
+        [unitId, shift.id, material, jam]
+      );
+
+      const recap = await buildRecap(shift.id);
+      return res.status(201).json({ currentHour: jam, ...recap });
     }
 
-    const shift = await getOrCreateOpenShift();
-    const jam = nowParts().hour;
+    if (req.method === "GET") {
+      const shift = await getOrCreateOpenShift();
+      const recap = await buildRecap(shift.id);
+      return res.status(200).json({ currentHour: nowParts().hour, ...recap });
+    }
 
-    await pool.query(
-      `INSERT INTO ritasi_clicks (unit_id, shift_id, material, jam) VALUES ($1, $2, $3, $4)`,
-      [unitId, shift.id, material, jam]
-    );
-
-    const recap = await buildRecap(shift.id);
-    return res.status(201).json({ currentHour: jam, ...recap });
+    res.setHeader("Allow", ["GET", "POST"]);
+    return res.status(405).end();
+  } catch (err) {
+    console.error("Error di /api/ritasi:", err);
+    return res.status(500).json({ error: err.message, stack: err.stack });
   }
-
-  if (req.method === "GET") {
-    const shift = await getOrCreateOpenShift();
-    const recap = await buildRecap(shift.id);
-    return res.status(200).json({ currentHour: nowParts().hour, ...recap });
-  }
-
-  res.setHeader("Allow", ["GET", "POST"]);
-  return res.status(405).end();
 }
