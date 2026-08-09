@@ -88,6 +88,29 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteUnit(unitId) {
+    const unit = units.find((u) => String(u.id) === String(unitId));
+    if (!confirm(`Hapus unit "${unit?.name}"? Riwayat ritasi unit ini di shift-shift sebelumnya tetap tersimpan, tapi unit ini tidak akan muncul lagi untuk input baru.`)) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/units", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(unitId) }),
+      });
+      if (res.ok) {
+        setSelectedUnit("");
+        await loadUnits();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Gagal menghapus unit: ${data.error || res.status}`);
+      }
+    } catch (err) {
+      alert(`Gagal menghapus unit (koneksi/server bermasalah): ${err.message}`);
+    }
+  }
+
   async function handleAddUnit(e) {
     e.preventDefault();
     if (!newUnitName.trim()) return;
@@ -143,6 +166,15 @@ export default function Home() {
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
+        {selectedUnit && (
+          <button
+            className="btn"
+            style={{ background: "#fff", color: "#b91c1c", border: "1px solid #b91c1c", marginBottom: 10 }}
+            onClick={() => handleDeleteUnit(selectedUnit)}
+          >
+            Hapus Unit Ini
+          </button>
+        )}
 
         <div className="section-title">Material aktif</div>
         <div className="material-grid">
@@ -278,5 +310,4 @@ export default function Home() {
       )}
     </div>
   );
-          }
-                
+              }
