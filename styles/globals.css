@@ -21,6 +21,19 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
+.header-card {
+  text-align: center;
+}
+
+.app-logo {
+  display: block;
+  max-height: 56px;
+  width: auto;
+  max-width: 70%;
+  margin: 0 auto 10px auto;
+  object-fit: contain;
+}
+
 .clock {
   font-size: 28px;
   font-weight: 700;
@@ -122,6 +135,47 @@ tr.total-row td {
 
 .table-scroll {
   overflow-x: auto;
+}
+
+th.current-hour, td.current-hour {
+  background: #dbeafe;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+thead th.current-hour {
+  background: #2563eb;
+  color: #fff;
+}
+
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+.history-row:last-child {
+  border-bottom: none;
+}
+
+.history-info {
+  flex: 1;
+}
+
+.btn-mini-danger {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #b91c1c;
+  background: #fff;
+  color: #b91c1c;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: 10px;
 }
 
 .btn {
