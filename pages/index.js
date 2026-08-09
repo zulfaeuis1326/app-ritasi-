@@ -63,8 +63,15 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ unitId: Number(selectedUnit), material }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Gagal mencatat ritasi: ${data.error || res.status}`);
+        return;
+      }
       const data = await res.json();
       setRecap(data);
+    } catch (err) {
+      alert(`Gagal mencatat ritasi (koneksi/server bermasalah): ${err.message}`);
     } finally {
       setLoadingClick(false);
     }
@@ -73,14 +80,21 @@ export default function Home() {
   async function handleAddUnit(e) {
     e.preventDefault();
     if (!newUnitName.trim()) return;
-    const res = await fetch("/api/units", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newUnitName.trim() }),
-    });
-    if (res.ok) {
-      setNewUnitName("");
-      loadUnits();
+    try {
+      const res = await fetch("/api/units", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newUnitName.trim() }),
+      });
+      if (res.ok) {
+        setNewUnitName("");
+        await loadUnits();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Gagal menambah unit: ${data.error || res.status}`);
+      }
+    } catch (err) {
+      alert(`Gagal menambah unit (koneksi/server bermasalah): ${err.message}`);
     }
   }
 
@@ -251,4 +265,4 @@ export default function Home() {
       )}
     </div>
   );
-}
+                                 }
