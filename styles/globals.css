@@ -1,1 +1,157 @@
+* { box-sizing: border-box; }
 
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f4f6f8;
+  color: #1f2937;
+}
+
+.container {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.clock {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.shift-label {
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+select, .unit-select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.material-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.material-btn {
+  padding: 12px 4px;
+  border-radius: 10px;
+  border: 2px solid #d1d5db;
+  background: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.material-btn.active {
+  border-color: #1f3864;
+  background: #1f3864;
+  color: #fff;
+}
+
+.big-click-btn {
+  width: 100%;
+  padding: 26px;
+  font-size: 22px;
+  font-weight: 800;
+  border-radius: 16px;
+  border: none;
+  background: #dc2626;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.05s ease;
+}
+
+.big-click-btn:active {
+  transform: scale(0.97);
+}
+
+.big-click-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.stat-row b { font-size: 18px; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+th, td {
+  border: 1px solid #e5e7eb;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+th {
+  background: #1f3864;
+  color: #fff;
+}
+
+tr.total-row td {
+  font-weight: 700;
+  background: #d9e1f2;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.btn {
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-secondary {
+  background: #1f3864;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.btn-danger {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.section-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
