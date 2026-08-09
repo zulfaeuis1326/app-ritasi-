@@ -15,6 +15,7 @@ export default function Home() {
   const [selectedUnit, setSelectedUnit] = useState("");
   const [material, setMaterial] = useState("");
   const [recap, setRecap] = useState(null);
+  const [recapError, setRecapError] = useState(null);
   const [newUnitName, setNewUnitName] = useState("");
   const [loadingClick, setLoadingClick] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -28,9 +29,19 @@ export default function Home() {
   }, [selectedUnit]);
 
   const loadRecap = useCallback(async () => {
-    const res = await fetch("/api/ritasi");
-    const data = await res.json();
-    setRecap(data);
+    try {
+      const res = await fetch("/api/ritasi");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setRecapError(data.error || `Error ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      setRecap(data);
+      setRecapError(null);
+    } catch (err) {
+      setRecapError(err.message);
+    }
   }, []);
 
   const loadPastShifts = useCallback(async () => {
@@ -119,7 +130,9 @@ export default function Home() {
     <div className="container">
       <div className="card">
         <div className="clock">{clock}</div>
-        <div className="shift-label">{recap?.shift?.label || "Memuat shift..."}</div>
+        <div className="shift-label">
+          {recapError ? `Error: ${recapError}` : (recap?.shift?.label || "Memuat shift...")}
+        </div>
       </div>
 
       <div className="card">
@@ -265,4 +278,5 @@ export default function Home() {
       )}
     </div>
   );
-                                 }
+          }
+                
