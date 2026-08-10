@@ -26,8 +26,7 @@ export default function Home() {
     const res = await fetch("/api/units");
     const data = await res.json();
     setUnits(data);
-    if (!selectedUnit && data.length > 0) setSelectedUnit(String(data[0].id));
-  }, [selectedUnit]);
+  }, []);
 
   const loadRecap = useCallback(async () => {
     try {
@@ -74,6 +73,18 @@ export default function Home() {
     return () => clearInterval(poll);
   }, [loadUnits, loadRecap, loadPastShifts, loadHistory]);
 
+  // Selalu pastikan selectedUnit valid — kalau unit yang dipilih sudah dihapus,
+  // atau belum ada yang dipilih sama sekali, otomatis pindah ke unit pertama.
+  // Ini mencegah tombol +RITASI "diam" karena selectedUnit nyasar ke unit yang tidak ada lagi.
+  useEffect(() => {
+    if (units.length === 0) {
+      if (selectedUnit !== "") setSelectedUnit("");
+      return;
+    }
+    const stillValid = units.some((u) => String(u.id) === selectedUnit);
+    if (!stillValid) setSelectedUnit(String(units[0].id));
+  }, [units, selectedUnit]);
+
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString("id-ID"));
     tick();
@@ -82,7 +93,14 @@ export default function Home() {
   }, []);
 
   async function handleClick() {
-    if (!selectedUnit || !material) return;
+    if (!selectedUnit) {
+      alert("Pilih unit dulu.");
+      return;
+    }
+    if (!material) {
+      alert("Pilih material dulu.");
+      return;
+    }
     setLoadingClick(true);
     try {
       const res = await fetch("/api/ritasi", {
@@ -382,4 +400,4 @@ export default function Home() {
       )}
     </div>
   );
-}
+                                 }
