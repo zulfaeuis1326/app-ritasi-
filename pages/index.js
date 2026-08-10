@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/router";
 
 const MATERIALS = ["OB", "COAL", "SOIL", "SOLU", "MUD"];
 
@@ -10,6 +11,8 @@ function formatJamCell(h) {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [authUser, setAuthUser] = useState(undefined); // undefined = belum dicek, null = belum login
   const [clock, setClock] = useState("");
   const [units, setUnits] = useState([]);
   const [selectedUnit, setSelectedUnit] = useState("");
@@ -33,6 +36,10 @@ export default function Home() {
   const loadRecap = useCallback(async () => {
     try {
       const res = await fetch("/api/ritasi");
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setRecapError(data.error || `Error ${res.status}`);
@@ -44,7 +51,7 @@ export default function Home() {
     } catch (err) {
       setRecapError(err.message);
     }
-  }, []);
+  }, [router]);
 
   const loadPastShifts = useCallback(async () => {
     const res = await fetch("/api/shift/list");
@@ -64,6 +71,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.user) {
+          router.push("/login");
+        } else {
+          setAuthUser(data.user);
+        }
+      })
+      .catch(() => router.push("/login"));
+  }, [router]);
+
+  useEffect(() => {
+    if (!authUser) return;
     loadUnits();
     loadRecap();
     loadPastShifts();
@@ -73,7 +94,7 @@ export default function Home() {
       loadHistory();
     }, 5000);
     return () => clearInterval(poll);
-  }, [loadUnits, loadRecap, loadPastShifts, loadHistory]);
+  }, [authUser, loadUnits, loadRecap, loadPastShifts, loadHistory]);
 
   // Selalu pastikan selectedUnit valid — kalau unit yang dipilih sudah dihapus,
   // atau belum ada yang dipilih sama sekali, otomatis pindah ke unit pertama.
@@ -189,6 +210,11 @@ export default function Home() {
     }
   }
 
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
+
   async function handleCloseShift() {
     if (!confirm("Yakin tutup shift sekarang? Data shift ini akan dikunci.")) return;
     setClosing(true);
@@ -205,6 +231,17 @@ export default function Home() {
 
   const selectedUnitRecap = recap?.units?.find((u) => String(u.id) === selectedUnit);
   const currentHourData = selectedUnitRecap?.hourly?.find((h) => h.jam === recap?.currentHour);
+
+  if (authUser === undefined) {
+    return (
+      <div className="container">
+        <div className="card"><div className="hint">Memuat...</div></div>
+      </div>
+    );
+  }
+  if (authUser === null) {
+    return null; // sedang redirect ke /login
+  }
 
   return (
     <div className="container">
@@ -226,6 +263,10 @@ export default function Home() {
           {recapError ? `Error: ${recapError}` : (recap?.shift?.label || "Memuat shift...")}
         </div>
         {recap?.tzInfo && <div className="hint" style={{ textAlign: "center" }}>Zona waktu server: {recap.tzInfo}</div>}
+        <div className="stat-row" style={{ marginTop: 12 }}>
+          <span>{authUser.username} ({authUser.role === "admin" ? "Admin" : "Operator"})</span>
+          <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
+        </div>
       </div>
 
       <div className="card">
@@ -236,7 +277,7 @@ export default function Home() {
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
-        {selectedUnit && (
+        {selectedUnit && authUser.role === "admin" && (
           <button
             className="btn"
             style={{ background: "#fff", color: "#b91c1c", border: "1px solid #b91c1c", marginBottom: 10 }}
@@ -377,11 +418,15 @@ export default function Home() {
           <div key={h.id} className="history-row">
             <div className="history-info">
               <b>{h.unit_name}</b> — {h.material} — jam {String(h.jam).padStart(2, "0")}
-              <div className="hint">{new Date(h.clicked_at).toLocaleTimeString("id-ID")}</div>
+              <div className="hint">
+                {h.operator_name || "(tanpa nama)"} · {new Date(h.clicked_at).toLocaleTimeString("id-ID")}
+              </div>
             </div>
-            <button className="btn-mini-danger" onClick={() => handleDeleteClick(h.id)}>
-              Hapus
-            </button>
+            {(authUser.role === "admin" || h.operator_id === authUser.id) && (
+              <button className="btn-mini-danger" onClick={() => handleDeleteClick(h.id)}>
+                Hapus
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -419,5 +464,4 @@ export default function Home() {
       )}
     </div>
   );
-              }
-              
+}
