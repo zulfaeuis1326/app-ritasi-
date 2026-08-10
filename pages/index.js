@@ -22,6 +22,7 @@ export default function Home() {
   const [pastShifts, setPastShifts] = useState([]);
   const [history, setHistory] = useState([]);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [cacheBuster] = useState(() => Date.now());
 
   const loadUnits = useCallback(async () => {
     const res = await fetch("/api/units");
@@ -209,7 +210,7 @@ export default function Home() {
     <div className="container">
       <div className="card header-card">
         <img
-          src="/logo.png"
+          src={`/logo.png?v=${cacheBuster}`}
           alt="Logo"
           className="app-logo"
           onError={(e) => { e.target.style.display = "none"; setLogoFailed(true); }}
@@ -386,6 +387,17 @@ export default function Home() {
       </div>
 
       <div className="card">
+        <button
+          className="btn btn-secondary"
+          onClick={() => window.open(`/api/shift/export?shiftId=${recap?.shift?.id}`, "_blank")}
+          disabled={!recap?.shift?.id}
+        >
+          Export Excel (Preview)
+        </button>
+        <div className="hint">Download rekap sejauh ini tanpa mengunci shift — bisa dipakai kapan saja, berkali-kali.</div>
+      </div>
+
+      <div className="card">
         <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
           {closing ? "Menutup shift..." : "Tutup Shift & Export Excel"}
         </button>
@@ -407,4 +419,5 @@ export default function Home() {
       )}
     </div>
   );
-}
+              }
+              
