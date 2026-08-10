@@ -1,12 +1,15 @@
 const { pool, ensureSchema } = require("../../lib/db");
 const { getOrCreateOpenShift } = require("../../lib/shift");
 const { buildRecap } = require("../../lib/recap");
-const { nowParts } = require("../../lib/time");
+const { nowParts, TZ_NAME, OFFSET_HOURS } = require("../../lib/time");
 const { MATERIALS } = require("../../lib/materials");
+const { getUserFromReq } = require("../../lib/auth");
 
 export default async function handler(req, res) {
   try {
     await ensureSchema();
+    const user = await getUserFromReq(req);
+    if (!user) return res.status(401).json({ error: "Belum login" });
 
     if (req.method === "POST") {
       const { unitId, material } = req.body || {};
@@ -18,18 +21,18 @@ export default async function handler(req, res) {
       const jam = nowParts().hour;
 
       await pool.query(
-        `INSERT INTO ritasi_clicks (unit_id, shift_id, material, jam) VALUES ($1, $2, $3, $4)`,
-        [unitId, shift.id, material, jam]
+        `INSERT INTO ritasi_clicks (unit_id, shift_id, material, jam, operator_id) VALUES ($1, $2, $3, $4, $5)`,
+        [unitId, shift.id, material, jam, user.id]
       );
 
       const recap = await buildRecap(shift.id);
-      return res.status(201).json({ currentHour: jam, ...recap });
+      return res.status(201).json({ currentHour: jam, tzInfo: `${TZ_NAME} (UTC+${OFFSET_HOURS})`, ...recap });
     }
 
     if (req.method === "GET") {
       const shift = await getOrCreateOpenShift();
       const recap = await buildRecap(shift.id);
-      return res.status(200).json({ currentHour: nowParts().hour, ...recap });
+      return res.status(200).json({ currentHour: nowParts().hour, tzInfo: `${TZ_NAME} (UTC+${OFFSET_HOURS})`, ...recap });
     }
 
     res.setHeader("Allow", ["GET", "POST"]);
