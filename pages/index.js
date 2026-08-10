@@ -267,6 +267,11 @@ export default function Home() {
           <span>{authUser.username} ({authUser.role === "admin" ? "Admin" : "Operator"})</span>
           <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
         </div>
+        {authUser.role === "admin" && (
+          <a href="/dashboard" className="hint" style={{ display: "block", textAlign: "center", marginTop: 8 }}>
+            📊 Buka Dashboard Analitik
+          </a>
+        )}
       </div>
 
       <div className="card">
