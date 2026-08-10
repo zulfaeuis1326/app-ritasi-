@@ -2,6 +2,7 @@ const ExcelJS = require("exceljs");
 const { ensureSchema } = require("../../../lib/db");
 const { buildRecap } = require("../../../lib/recap");
 const { MATERIALS } = require("../../../lib/materials");
+const { getUserFromReq } = require("../../../lib/auth");
 
 const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
 const HEADER_FONT = { color: { argb: "FFFFFFFF" }, bold: true };
@@ -25,6 +26,8 @@ function cellMateriText(hourCell) {
 
 export default async function handler(req, res) {
   await ensureSchema();
+  const user = await getUserFromReq(req);
+  if (!user) return res.status(401).json({ error: "Belum login" });
 
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);

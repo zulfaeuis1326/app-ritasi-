@@ -1,10 +1,13 @@
 const { pool, ensureSchema } = require("../../../lib/db");
 const { getOrCreateOpenShift } = require("../../../lib/shift");
 const { buildRecap } = require("../../../lib/recap");
+const { getUserFromReq } = require("../../../lib/auth");
 
 export default async function handler(req, res) {
   try {
     await ensureSchema();
+    const user = await getUserFromReq(req);
+    if (!user) return res.status(401).json({ error: "Belum login" });
 
     if (req.method !== "POST") {
       res.setHeader("Allow", ["POST"]);
