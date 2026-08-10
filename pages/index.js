@@ -21,6 +21,7 @@ export default function Home() {
   const [closing, setClosing] = useState(false);
   const [pastShifts, setPastShifts] = useState([]);
   const [history, setHistory] = useState([]);
+  const [logoFailed, setLogoFailed] = useState(false);
 
   const loadUnits = useCallback(async () => {
     const res = await fetch("/api/units");
@@ -211,8 +212,14 @@ export default function Home() {
           src="/logo.png"
           alt="Logo"
           className="app-logo"
-          onError={(e) => { e.target.style.display = "none"; }}
+          onError={(e) => { e.target.style.display = "none"; setLogoFailed(true); }}
+          onLoad={() => setLogoFailed(false)}
         />
+        {logoFailed && (
+          <div className="hint" style={{ textAlign: "center", color: "#b91c1c" }}>
+            Logo belum ditemukan di /logo.png — cek lagi file ada di folder public/ repo
+          </div>
+        )}
         <div className="clock">{clock}</div>
         <div className="shift-label">
           {recapError ? `Error: ${recapError}` : (recap?.shift?.label || "Memuat shift...")}
@@ -400,4 +407,4 @@ export default function Home() {
       )}
     </div>
   );
-                                 }
+}
