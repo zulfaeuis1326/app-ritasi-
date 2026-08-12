@@ -4,6 +4,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { atLeast } from "../lib/roles";
 
 const MATERIAL_COLORS = {
   OB: "#1f3864",
@@ -26,7 +27,7 @@ export default function Dashboard() {
         .then((res) => res.json())
         .then((d) => {
           if (!d.user) router.push("/login");
-          else if (d.user.role !== "admin") router.push("/");
+          else if (!atLeast(d.user.role, "pengawas")) router.push("/");
           else setAuthUser(d.user);
         })
         .catch(() => router.push("/login"));

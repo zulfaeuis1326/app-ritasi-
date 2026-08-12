@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
+import { atLeast } from "../lib/roles";
 
 const MATERIALS = ["OB", "COAL", "SOIL", "SOLU", "MUD"];
 
@@ -32,7 +33,7 @@ export default function Home() {
   const [setupUnits, setSetupUnits] = useState([]);
   const [settingUnit, setSettingUnit] = useState(false);
 
-  const isAdmin = !!authUser && authUser.role === "admin";
+  const isAdmin = !!authUser && atLeast(authUser.role, "admin");
   const isOperator = !!authUser && authUser.role === "operator";
   const needsUnitSetup = isOperator && !authUser.unit_id;
 
@@ -86,6 +87,9 @@ export default function Home() {
         .then(function (data) {
           if (!data.user) {
             router.push("/login");
+          } else if (data.user.role === "pengawas") {
+            // Sementara: UI monitoring khusus pengawas belum ada, arahkan ke dashboard dulu.
+            router.push("/dashboard");
           } else {
             setAuthUser(data.user);
           }
@@ -561,4 +565,52 @@ export default function Home() {
               {(isAdmin || h.operator_id === authUser.id) && (
                 <button className="btn-mini-danger" onClick={function () { handleDeleteClick(h.id); }}>
                   Hapus
-        
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {isAdmin && (
+        <>
+          <div className="card">
+            <button
+              className="btn btn-secondary"
+              onClick={function () {
+                window.open("/api/shift/export?shiftId=" + (recap && recap.shift ? recap.shift.id : ""), "_blank");
+              }}
+              disabled={!recap || !recap.shift}
+            >
+              Export Excel (Preview)
+            </button>
+            <div className="hint">Download rekap sejauh ini tanpa mengunci shift - bisa dipakai kapan saja, berkali-kali.</div>
+          </div>
+
+          <div className="card">
+            <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
+              {closing ? "Menutup shift..." : "Tutup Shift & Export Excel"}
+            </button>
+            <div className="hint">Data shift dikunci setelah ditutup. File Excel otomatis terunduh.</div>
+          </div>
+
+          {pastShifts.length > 0 && (
+            <div className="card">
+              <div className="section-title">Riwayat Shift</div>
+              {pastShifts.map(function (s) {
+                return (
+                  <div key={s.id} className="stat-row">
+                    <span>{s.label}</span>
+                    <a href={"/api/shift/export?shiftId=" + s.id} target="_blank" rel="noreferrer">
+                      Download
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
