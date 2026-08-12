@@ -21,14 +21,23 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((d) => {
-        if (!d.user) router.push("/login");
-        else if (d.user.role !== "admin") router.push("/");
-        else setAuthUser(d.user);
-      })
-      .catch(() => router.push("/login"));
+    function checkAuth() {
+      fetch("/api/auth/me", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((d) => {
+          if (!d.user) router.push("/login");
+          else if (d.user.role !== "admin") router.push("/");
+          else setAuthUser(d.user);
+        })
+        .catch(() => router.push("/login"));
+    }
+    checkAuth();
+
+    function handlePageShow(e) {
+      if (e.persisted) window.location.reload();
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, [router]);
 
   const loadData = useCallback(async () => {
