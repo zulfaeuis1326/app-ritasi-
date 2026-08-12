@@ -23,7 +23,7 @@ export default function Login() {
         setError(data.error || "Gagal login");
         return;
       }
-      router.push("/");
+      window.location.href = "/";
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,4 +63,4 @@ export default function Login() {
       </div>
     </div>
   );
-}
+                                         }
