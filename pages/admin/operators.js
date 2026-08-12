@@ -167,6 +167,8 @@ export default function AdminOperators() {
         ))}
         {list.length === 0 && !error && <div className="hint">Belum ada akun.</div>}
       </div>
+
+      <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
         }
