@@ -28,6 +28,14 @@ export default function Home() {
   const [logoFailed, setLogoFailed] = useState(false);
   const [cacheBuster] = useState(function () { return Date.now(); });
 
+  // Khusus operator yang belum pilih unit (setup sekali di awal)
+  const [setupUnits, setSetupUnits] = useState([]);
+  const [settingUnit, setSettingUnit] = useState(false);
+
+  const isAdmin = !!authUser && authUser.role === "admin";
+  const isOperator = !!authUser && authUser.role === "operator";
+  const needsUnitSetup = isOperator && !authUser.unit_id;
+
   const loadUnits = useCallback(async function () {
     const res = await fetch("/api/units");
     const data = await res.json();
@@ -86,9 +94,6 @@ export default function Home() {
     }
     checkAuth();
 
-    // Kalau halaman ini dipulihkan dari cache browser (misal lewat tombol back
-    // setelah ganti akun di tab/halaman lain), paksa reload total supaya identitas
-    // yang ditampilkan selalu dicek ulang dari server, bukan dari tampilan lama.
     function handlePageShow(e) {
       if (e.persisted) {
         window.location.reload();
@@ -98,27 +103,40 @@ export default function Home() {
     return function () { window.removeEventListener("pageshow", handlePageShow); };
   }, [router]);
 
+  // Operator: kunci selectedUnit ke unit mereka sendiri. Admin: bebas pilih dari daftar unit.
   useEffect(function () {
     if (!authUser) return;
-    loadUnits();
+    if (isOperator && authUser.unit_id) {
+      setSelectedUnit(String(authUser.unit_id));
+    }
+  }, [authUser, isOperator]);
+
+  useEffect(function () {
+    if (!authUser || needsUnitSetup) return;
+    if (isAdmin) {
+      loadUnits();
+      loadPastShifts();
+    }
     loadRecap();
-    loadPastShifts();
     loadHistory();
     const poll = setInterval(function () {
       loadRecap();
       loadHistory();
     }, 5000);
     return function () { clearInterval(poll); };
-  }, [authUser, loadUnits, loadRecap, loadPastShifts, loadHistory]);
+  }, [authUser, needsUnitSetup, isAdmin, loadUnits, loadRecap, loadPastShifts, loadHistory]);
 
+  // Auto-perbaiki selectedUnit kalau nyasar/dihapus — cuma berlaku buat admin,
+  // operator sudah dikunci di effect sebelumnya.
   useEffect(function () {
+    if (!isAdmin) return;
     if (units.length === 0) {
       if (selectedUnit !== "") setSelectedUnit("");
       return;
     }
     const stillValid = units.some(function (u) { return String(u.id) === selectedUnit; });
     if (!stillValid) setSelectedUnit(String(units[0].id));
-  }, [units, selectedUnit]);
+  }, [units, selectedUnit, isAdmin]);
 
   useEffect(function () {
     function tick() { setClock(new Date().toLocaleTimeString("id-ID")); }
@@ -126,6 +144,37 @@ export default function Home() {
     const t = setInterval(tick, 1000);
     return function () { clearInterval(t); };
   }, []);
+
+  // Ambil daftar unit buat layar setup sekali di awal (operator baru, belum pilih unit)
+  useEffect(function () {
+    if (!needsUnitSetup) return;
+    fetch("/api/units")
+      .then(function (res) { return res.json(); })
+      .then(function (data) { setSetupUnits(data); })
+      .catch(function () { setSetupUnits([]); });
+  }, [needsUnitSetup]);
+
+  async function handleSetUnit(unitId) {
+    if (!confirm("Kunci akun kamu ke unit ini untuk sesi login sekarang? Kalau mau ganti unit, logout dulu lalu login lagi.")) return;
+    setSettingUnit(true);
+    try {
+      const res = await fetch("/api/auth/set-unit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unitId: unitId }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal memilih unit: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal memilih unit (koneksi/server bermasalah): " + err.message);
+    } finally {
+      setSettingUnit(false);
+    }
+  }
 
   async function handleClick() {
     if (!selectedUnit) {
@@ -260,6 +309,39 @@ export default function Home() {
     return null;
   }
 
+  // Layar setup sekali di awal — operator baru wajib pilih unit dulu sebelum bisa apa-apa
+  if (needsUnitSetup) {
+    return (
+      <div className="container">
+        <div className="card header-card">
+          <div className="clock" style={{ fontSize: 22 }}>Pilih Unit Kamu</div>
+          <div className="hint" style={{ textAlign: "center" }}>
+            Halo {authUser.username} — pilih 1 unit yang akan kamu operasikan. Setelah dipilih,
+            unit ini terkunci sampai kamu logout. Mau ganti unit? Logout dulu, lalu login lagi.
+          </div>
+        </div>
+        <div className="card">
+          {setupUnits.length === 0 && <div className="hint">Memuat daftar unit... (kalau kosong, minta admin menambah unit dulu)</div>}
+          {setupUnits.map(function (u) {
+            return (
+              <button
+                key={u.id}
+                className="btn btn-secondary"
+                disabled={settingUnit}
+                onClick={function () { handleSetUnit(u.id); }}
+              >
+                {u.name}
+              </button>
+            );
+          })}
+        </div>
+        <div className="card">
+          <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <div className="card header-card">
@@ -283,32 +365,45 @@ export default function Home() {
           <div className="hint" style={{ textAlign: "center" }}>Zona waktu server: {recap.tzInfo}</div>
         )}
         <div className="stat-row" style={{ marginTop: 12 }}>
-          <span>{authUser.username} ({authUser.role === "admin" ? "Admin" : "Operator"})</span>
+          <span>{authUser.username} ({isAdmin ? "Admin" : "Operator"})</span>
           <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
         </div>
-        {authUser.role === "admin" && (
-          <a href="/dashboard" className="hint" style={{ display: "block", textAlign: "center", marginTop: 8 }}>
-            Buka Dashboard Analitik
-          </a>
+        {isAdmin && (
+          <>
+            <a href="/dashboard" className="hint" style={{ display: "block", textAlign: "center", marginTop: 8 }}>
+              Buka Dashboard Analitik
+            </a>
+            <a href="/admin/operators" className="hint" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+              Kelola Unit Operator
+            </a>
+          </>
         )}
       </div>
 
       <div className="card">
         <div className="section-title">Unit</div>
-        <select value={selectedUnit} onChange={function (e) { setSelectedUnit(e.target.value); }}>
-          {units.length === 0 && <option value="">Belum ada unit</option>}
-          {units.map(function (u) {
-            return <option key={u.id} value={u.id}>{u.name}</option>;
-          })}
-        </select>
-        {selectedUnit && authUser.role === "admin" && (
-          <button
-            className="btn"
-            style={{ background: "transparent", color: "#e63946", border: "1px solid #e63946", marginBottom: 10 }}
-            onClick={function () { handleDeleteUnit(selectedUnit); }}
-          >
-            Hapus Unit Ini
-          </button>
+        {isAdmin ? (
+          <>
+            <select value={selectedUnit} onChange={function (e) { setSelectedUnit(e.target.value); }}>
+              {units.length === 0 && <option value="">Belum ada unit</option>}
+              {units.map(function (u) {
+                return <option key={u.id} value={u.id}>{u.name}</option>;
+              })}
+            </select>
+            {selectedUnit && (
+              <button
+                className="btn"
+                style={{ background: "transparent", color: "#e63946", border: "1px solid #e63946", marginBottom: 10 }}
+                onClick={function () { handleDeleteUnit(selectedUnit); }}
+              >
+                Hapus Unit Ini
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="hint" style={{ fontSize: 16, color: "#f2f0ea", marginBottom: 10 }}>
+            Unit kamu: <b>{authUser.unit_name}</b> (terkunci sampai logout — logout & login lagi untuk ganti unit)
+          </div>
         )}
 
         <div className="section-title">Material aktif</div>
@@ -345,23 +440,27 @@ export default function Home() {
         {!material && <div className="hint">Pilih material dulu sebelum klik ritasi.</div>}
       </div>
 
-      <div className="card">
-        <div className="section-title">Tambah Unit</div>
-        <form onSubmit={handleAddUnit} style={{ display: "flex", gap: 8 }}>
-          <input
-            value={newUnitName}
-            onChange={function (e) { setNewUnitName(e.target.value); }}
-            placeholder="Contoh: HD-05"
-            style={{ flex: 1 }}
-          />
-          <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }}>
-            Tambah
-          </button>
-        </form>
-      </div>
+      {isAdmin && (
+        <div className="card">
+          <div className="section-title">Tambah Unit</div>
+          <form onSubmit={handleAddUnit} style={{ display: "flex", gap: 8 }}>
+            <input
+              value={newUnitName}
+              onChange={function (e) { setNewUnitName(e.target.value); }}
+              placeholder="Contoh: HD-05"
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }}>
+              Tambah
+            </button>
+          </form>
+        </div>
+      )}
 
       <div className="card">
-        <div className="section-title">Rekap Per Jam - Shift Berjalan</div>
+        <div className="section-title">
+          {isAdmin ? "Rekap Per Jam - Shift Berjalan" : "Rekap Per Jam - Unit Kamu"}
+        </div>
         <div className="hint" style={{ marginBottom: 8 }}>
           Kolom jam yang ditandai adalah jam yang sedang berjalan saat ini.
         </div>
@@ -396,7 +495,7 @@ export default function Home() {
                   </tr>
                 );
               })}
-              {recap && (
+              {recap && isAdmin && (
                 <tr className="total-row">
                   <td>TOTAL</td>
                   {recap.grandHourlyTotals && recap.grandHourlyTotals.map(function (v, i) {
@@ -447,7 +546,7 @@ export default function Home() {
       <div className="card">
         <div className="section-title">Riwayat & Revisi Ritasi</div>
         <div className="hint" style={{ marginBottom: 8 }}>
-          Salah pencet unit/material? Hapus entri yang salah di sini, lalu klik ulang yang benar.
+          Salah pencet material? Hapus entri yang salah di sini, lalu klik ulang yang benar.
         </div>
         {history.length === 0 && <div className="hint">Belum ada klik ritasi di shift ini.</div>}
         {history.map(function (h) {
@@ -459,52 +558,7 @@ export default function Home() {
                   {h.operator_name || "(tanpa nama)"} - {new Date(h.clicked_at).toLocaleTimeString("id-ID")}
                 </div>
               </div>
-              {(authUser.role === "admin" || h.operator_id === authUser.id) && (
+              {(isAdmin || h.operator_id === authUser.id) && (
                 <button className="btn-mini-danger" onClick={function () { handleDeleteClick(h.id); }}>
                   Hapus
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="card">
-        <button
-          className="btn btn-secondary"
-          onClick={function () {
-            window.open("/api/shift/export?shiftId=" + (recap && recap.shift ? recap.shift.id : ""), "_blank");
-          }}
-          disabled={!recap || !recap.shift}
-        >
-          Export Excel (Preview)
-        </button>
-        <div className="hint">Download rekap sejauh ini tanpa mengunci shift - bisa dipakai kapan saja, berkali-kali.</div>
-      </div>
-
-      <div className="card">
-        <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
-          {closing ? "Menutup shift..." : "Tutup Shift & Export Excel"}
-        </button>
-        <div className="hint">Data shift dikunci setelah ditutup. File Excel otomatis terunduh.</div>
-      </div>
-
-      {pastShifts.length > 0 && (
-        <div className="card">
-          <div className="section-title">Riwayat Shift</div>
-          {pastShifts.map(function (s) {
-            return (
-              <div key={s.id} className="stat-row">
-                <span>{s.label}</span>
-                <a href={"/api/shift/export?shiftId=" + s.id} target="_blank" rel="noreferrer">
-                  Download
-                </a>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-          }
-                  
+        
