@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     }
 
     const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM users`);
-    const role = countRes.rows[0].total === 0 ? "admin" : "operator";
+    const role = countRes.rows[0].total === 0 ? "superadmin" : "operator";
 
     let inserted;
     try {
