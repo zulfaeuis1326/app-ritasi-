@@ -23,7 +23,7 @@ export default function Register() {
         setError(data.error || "Gagal daftar");
         return;
       }
-      router.push("/");
+      window.location.href = "/";
     } catch (err) {
       setError(err.message);
     } finally {
