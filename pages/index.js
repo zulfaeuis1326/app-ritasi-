@@ -560,4 +560,59 @@ export default function Home() {
                   {h.operator_name || "(tanpa nama)"} - {new Date(h.clicked_at).toLocaleTimeString("id-ID")}
                 </div>
               </div>
-              {(isAdmin || h.operator_id ==
+              {(isAdmin || h.operator_id === authUser.id) && (
+                <button className="btn-mini-danger" onClick={function () { handleDeleteClick(h.id); }}>
+                  Hapus
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {isAdmin && (
+        <>
+          <div className="card">
+            <div className="section-title">1. Export Data (Preview — Tanpa Kunci Shift)</div>
+            <button
+              className="btn btn-secondary"
+              onClick={function () {
+                window.open("/api/shift/export?shiftId=" + (recap && recap.shift ? recap.shift.id : ""), "_blank");
+              }}
+              disabled={!recap || !recap.shift}
+            >
+              Export Excel (Preview)
+            </button>
+            <div className="hint">Download rekap sejauh ini TANPA mengunci shift — boleh dipakai kapan saja, berkali-kali, shift tetap berjalan seperti biasa.</div>
+          </div>
+
+          <div className="card">
+            <div className="section-title">2. Tutup Shift (Aksi Terpisah — Mengunci Data)</div>
+            <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
+              {closing ? "Menutup shift..." : "Tutup Shift"}
+            </button>
+            <div className="hint">Tombol ini HANYA mengunci shift, TIDAK ikut export apa pun. Kalau butuh file Excel dari shift yang sudah ditutup, download lewat "Riwayat Shift" di bawah.</div>
+          </div>
+
+          {pastShifts.length > 0 && (
+            <div className="card">
+              <div className="section-title">Riwayat Shift</div>
+              {pastShifts.map(function (s) {
+                return (
+                  <div key={s.id} className="stat-row">
+                    <span>{s.label}</span>
+                    <a href={"/api/shift/export?shiftId=" + s.id} target="_blank" rel="noreferrer">
+                      Download
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="app-footer">designed by Najib.dev</div>
+    </div>
+  );
+}
