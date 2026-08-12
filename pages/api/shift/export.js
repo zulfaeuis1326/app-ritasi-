@@ -3,6 +3,7 @@ const { ensureSchema } = require("../../../lib/db");
 const { buildRecap } = require("../../../lib/recap");
 const { MATERIALS } = require("../../../lib/materials");
 const { getUserFromReq } = require("../../../lib/auth");
+const { atLeast } = require("../../../lib/roles");
 
 const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
 const HEADER_FONT = { color: { argb: "FFFFFFFF" }, bold: true };
@@ -28,6 +29,9 @@ export default async function handler(req, res) {
   await ensureSchema();
   const user = await getUserFromReq(req);
   if (!user) return res.status(401).json({ error: "Belum login" });
+  if (!atLeast(user.role, "pengawas")) {
+    return res.status(403).json({ error: "Hanya pengawas ke atas yang bisa export Excel" });
+  }
 
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
