@@ -2,6 +2,7 @@ const { pool, ensureSchema } = require("../../../lib/db");
 const { getOrCreateOpenShift } = require("../../../lib/shift");
 const { buildRecap } = require("../../../lib/recap");
 const { getUserFromReq } = require("../../../lib/auth");
+const { atLeast } = require("../../../lib/roles");
 
 export default async function handler(req, res) {
   try {
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: "Data ritasi tidak ditemukan (mungkin sudah dihapus)" });
       }
       const isOwner = existing.rows[0].operator_id === user.id;
-      if (user.role !== "admin" && !isOwner) {
+      if (!atLeast(user.role, "admin") && !isOwner) {
         return res.status(403).json({ error: "Hanya bisa menghapus entri yang kamu input sendiri" });
       }
 
