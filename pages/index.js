@@ -72,16 +72,30 @@ export default function Home() {
   }, []);
 
   useEffect(function () {
-    fetch("/api/auth/me")
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (!data.user) {
-          router.push("/login");
-        } else {
-          setAuthUser(data.user);
-        }
-      })
-      .catch(function () { router.push("/login"); });
+    function checkAuth() {
+      fetch("/api/auth/me", { cache: "no-store" })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data.user) {
+            router.push("/login");
+          } else {
+            setAuthUser(data.user);
+          }
+        })
+        .catch(function () { router.push("/login"); });
+    }
+    checkAuth();
+
+    // Kalau halaman ini dipulihkan dari cache browser (misal lewat tombol back
+    // setelah ganti akun di tab/halaman lain), paksa reload total supaya identitas
+    // yang ditampilkan selalu dicek ulang dari server, bukan dari tampilan lama.
+    function handlePageShow(e) {
+      if (e.persisted) {
+        window.location.reload();
+      }
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return function () { window.removeEventListener("pageshow", handlePageShow); };
   }, [router]);
 
   useEffect(function () {
@@ -211,7 +225,7 @@ export default function Home() {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    window.location.href = "/login";
   }
 
   async function handleCloseShift() {
@@ -492,5 +506,5 @@ export default function Home() {
       )}
     </div>
   );
-                         }
+          }
                   
