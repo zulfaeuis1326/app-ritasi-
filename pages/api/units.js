@@ -1,5 +1,6 @@
 const { pool, ensureSchema } = require("../../lib/db");
 const { getUserFromReq } = require("../../lib/auth");
+const { atLeast } = require("../../lib/roles");
 
 export default async function handler(req, res) {
   try {
@@ -15,6 +16,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
+      if (!atLeast(user.role, "admin")) {
+        return res.status(403).json({ error: "Hanya admin/superadmin yang bisa menambah unit" });
+      }
       const { name } = req.body || {};
       if (!name || !name.trim()) {
         return res.status(400).json({ error: "Nama unit wajib diisi" });
@@ -34,8 +38,8 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "DELETE") {
-      if (user.role !== "admin") {
-        return res.status(403).json({ error: "Hanya admin yang bisa menghapus unit" });
+      if (!atLeast(user.role, "admin")) {
+        return res.status(403).json({ error: "Hanya admin/superadmin yang bisa menghapus unit" });
       }
       const { id } = req.body || {};
       await pool.query(`UPDATE units SET active = false WHERE id = $1`, [id]);

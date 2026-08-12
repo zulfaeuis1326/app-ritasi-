@@ -1,5 +1,6 @@
 const { ensureSchema } = require("../../lib/db");
 const { getUserFromReq } = require("../../lib/auth");
+const { atLeast } = require("../../lib/roles");
 const { getShiftRangeStats, getDayRangeStats } = require("../../lib/dashboard");
 
 export default async function handler(req, res) {
@@ -7,8 +8,8 @@ export default async function handler(req, res) {
     await ensureSchema();
     const user = await getUserFromReq(req);
     if (!user) return res.status(401).json({ error: "Belum login" });
-    if (user.role !== "admin") {
-      return res.status(403).json({ error: "Dashboard hanya untuk admin" });
+    if (!atLeast(user.role, "pengawas")) {
+      return res.status(403).json({ error: "Dashboard hanya untuk pengawas ke atas" });
     }
 
     if (req.method !== "GET") {
