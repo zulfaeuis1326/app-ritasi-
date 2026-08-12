@@ -168,6 +168,8 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-}
+                    }
