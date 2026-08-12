@@ -76,6 +76,25 @@ export default function AdminOperators() {
     }
   }
 
+  async function handleDelete(userId, username) {
+    if (!confirm(`Hapus akun "${username}"? Login-nya akan hilang permanen (riwayat ritasi yang pernah dia input TETAP ada, cuma tidak lagi tercatat atas nama dia).`)) return;
+    try {
+      const res = await fetch("/api/admin/operators", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action: "delete_user" }),
+      });
+      if (res.ok) {
+        await loadList();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(`Gagal hapus akun: ${d.error || res.status}`);
+      }
+    } catch (err) {
+      alert(`Gagal hapus akun (koneksi/server bermasalah): ${err.message}`);
+    }
+  }
+
   if (authUser === undefined || authUser === null) {
     return (
       <div className="container">
@@ -119,21 +138,29 @@ export default function AdminOperators() {
                 </button>
               )}
               {u.id !== authUser.id && (
-                <select
-                  defaultValue=""
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val) handleSetRole(u.id, u.username, val);
-                    e.target.value = "";
-                  }}
-                >
-                  <option value="" disabled>Ubah role...</option>
-                  {assignableRoles
-                    .filter((r) => r !== u.role)
-                    .map((r) => (
-                      <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-                    ))}
-                </select>
+                <>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) handleSetRole(u.id, u.username, val);
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="" disabled>Ubah role...</option>
+                    {assignableRoles
+                      .filter((r) => r !== u.role)
+                      .map((r) => (
+                        <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+                      ))}
+                  </select>
+                  {/* Admin biasa cuma boleh hapus akun pengawas/operator; superadmin bebas semua */}
+                  {(authUser.role === "superadmin" || (u.role !== "admin" && u.role !== "superadmin")) && (
+                    <button className="btn-mini-danger" onClick={() => handleDelete(u.id, u.username)}>
+                      Hapus Akun
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
