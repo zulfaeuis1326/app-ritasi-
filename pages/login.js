@@ -61,6 +61,7 @@ export default function Login() {
           Belum punya akun? <a href="/register">Daftar di sini</a>
         </div>
       </div>
+      <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
 }
