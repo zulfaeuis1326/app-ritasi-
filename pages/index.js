@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
-import { atLeast } from "../lib/roles";
+import { atLeast, ROLE_LABEL } from "../lib/roles";
 
 const MATERIALS = ["OB", "COAL", "SOIL", "SOLU", "MUD"];
 
@@ -35,7 +35,13 @@ export default function Home() {
 
   const isAdmin = !!authUser && atLeast(authUser.role, "admin");
   const isOperator = !!authUser && authUser.role === "operator";
+  const isPengawas = !!authUser && authUser.role === "pengawas";
+  const canMonitorAll = !!authUser && atLeast(authUser.role, "pengawas");
+  const canClickRitasi = !!authUser && (isOperator || isAdmin);
   const needsUnitSetup = isOperator && !authUser.unit_id;
+
+  // Khusus operator setup awal: daftarkan unit baru sendiri (bukan pilih dari list)
+  const [newSetupUnitName, setNewSetupUnitName] = useState("");
 
   const loadUnits = useCallback(async function () {
     const res = await fetch("/api/units");
@@ -87,9 +93,6 @@ export default function Home() {
         .then(function (data) {
           if (!data.user) {
             router.push("/login");
-          } else if (data.user.role === "pengawas") {
-            // Sementara: UI monitoring khusus pengawas belum ada, arahkan ke dashboard dulu.
-            router.push("/dashboard");
           } else {
             setAuthUser(data.user);
           }
@@ -119,6 +122,8 @@ export default function Home() {
     if (!authUser || needsUnitSetup) return;
     if (isAdmin) {
       loadUnits();
+    }
+    if (canMonitorAll) {
       loadPastShifts();
     }
     loadRecap();
@@ -128,7 +133,7 @@ export default function Home() {
       loadHistory();
     }, 5000);
     return function () { clearInterval(poll); };
-  }, [authUser, needsUnitSetup, isAdmin, loadUnits, loadRecap, loadPastShifts, loadHistory]);
+  }, [authUser, needsUnitSetup, isAdmin, canMonitorAll, loadUnits, loadRecap, loadPastShifts, loadHistory]);
 
   // Auto-perbaiki selectedUnit kalau nyasar/dihapus — cuma berlaku buat admin,
   // operator sudah dikunci di effect sebelumnya.
@@ -175,6 +180,30 @@ export default function Home() {
       }
     } catch (err) {
       alert("Gagal memilih unit (koneksi/server bermasalah): " + err.message);
+    } finally {
+      setSettingUnit(false);
+    }
+  }
+
+  async function handleRegisterOwnUnit(e) {
+    e.preventDefault();
+    if (!newSetupUnitName.trim()) return;
+    if (!confirm("Daftarkan unit \"" + newSetupUnitName.trim() + "\" dan langsung pakai unit ini? Kalau mau ganti nanti, logout dulu lalu login lagi.")) return;
+    setSettingUnit(true);
+    try {
+      const res = await fetch("/api/auth/set-unit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newUnitName: newSetupUnitName.trim() }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal mendaftarkan unit: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal mendaftarkan unit (koneksi/server bermasalah): " + err.message);
     } finally {
       setSettingUnit(false);
     }
@@ -323,7 +352,7 @@ export default function Home() {
           </div>
         </div>
         <div className="card">
-          {setupUnits.length === 0 && <div className="hint">Memuat daftar unit... (kalau kosong, minta admin menambah unit dulu)</div>}
+          {setupUnits.length === 0 && <div className="hint">Belum ada unit terdaftar — daftarkan unit kamu sendiri di bawah.</div>}
           {setupUnits.map(function (u) {
             return (
               <button
@@ -336,6 +365,22 @@ export default function Home() {
               </button>
             );
           })}
+        </div>
+        <div className="card">
+          <div className="section-title">Nomor unit kamu tidak ada di atas?</div>
+          <form onSubmit={handleRegisterOwnUnit} style={{ display: "flex", gap: 8 }}>
+            <input
+              value={newSetupUnitName}
+              onChange={function (e) { setNewSetupUnitName(e.target.value); }}
+              placeholder="Contoh: HD-07"
+              style={{ flex: 1 }}
+              disabled={settingUnit}
+            />
+            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }} disabled={settingUnit}>
+              Daftarkan
+            </button>
+          </form>
+          <div className="hint">Ketik nomor unit kamu sendiri kalau belum ada di daftar tombol di atas.</div>
         </div>
         <div className="card">
           <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
@@ -367,80 +412,82 @@ export default function Home() {
           <div className="hint" style={{ textAlign: "center" }}>Zona waktu server: {recap.tzInfo}</div>
         )}
         <div className="stat-row" style={{ marginTop: 12 }}>
-          <span>{authUser.username} ({isAdmin ? "Admin" : "Operator"})</span>
+          <span>{authUser.username} ({ROLE_LABEL[authUser.role] || authUser.role})</span>
           <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
         </div>
+        {canMonitorAll && (
+          <a href="/dashboard" className="hint" style={{ display: "block", textAlign: "center", marginTop: 8 }}>
+            Buka Dashboard Analitik
+          </a>
+        )}
         {isAdmin && (
-          <>
-            <a href="/dashboard" className="hint" style={{ display: "block", textAlign: "center", marginTop: 8 }}>
-              Buka Dashboard Analitik
-            </a>
-            <a href="/admin/operators" className="hint" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
-              Kelola Unit Operator
-            </a>
-          </>
+          <a href="/admin/operators" className="hint" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+            Kelola Akun
+          </a>
         )}
       </div>
 
-      <div className="card">
-        <div className="section-title">Unit</div>
-        {isAdmin ? (
-          <>
-            <select value={selectedUnit} onChange={function (e) { setSelectedUnit(e.target.value); }}>
-              {units.length === 0 && <option value="">Belum ada unit</option>}
-              {units.map(function (u) {
-                return <option key={u.id} value={u.id}>{u.name}</option>;
-              })}
-            </select>
-            {selectedUnit && (
-              <button
-                className="btn"
-                style={{ background: "transparent", color: "#e63946", border: "1px solid #e63946", marginBottom: 10 }}
-                onClick={function () { handleDeleteUnit(selectedUnit); }}
-              >
-                Hapus Unit Ini
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="hint" style={{ fontSize: 16, color: "#f2f0ea", marginBottom: 10 }}>
-            Unit kamu: <b>{authUser.unit_name}</b> (terkunci sampai logout — logout & login lagi untuk ganti unit)
+      {canClickRitasi && (
+        <div className="card">
+          <div className="section-title">Unit</div>
+          {isAdmin ? (
+            <>
+              <select value={selectedUnit} onChange={function (e) { setSelectedUnit(e.target.value); }}>
+                {units.length === 0 && <option value="">Belum ada unit</option>}
+                {units.map(function (u) {
+                  return <option key={u.id} value={u.id}>{u.name}</option>;
+                })}
+              </select>
+              {selectedUnit && (
+                <button
+                  className="btn"
+                  style={{ background: "transparent", color: "#e63946", border: "1px solid #e63946", marginBottom: 10 }}
+                  onClick={function () { handleDeleteUnit(selectedUnit); }}
+                >
+                  Hapus Unit Ini
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="hint" style={{ fontSize: 16, color: "#f2f0ea", marginBottom: 10 }}>
+              Unit kamu: <b>{authUser.unit_name}</b> (terkunci sampai logout — logout & login lagi untuk ganti unit)
+            </div>
+          )}
+
+          <div className="section-title">Material aktif</div>
+          <div className="material-grid">
+            {MATERIALS.map(function (m) {
+              return (
+                <button
+                  key={m}
+                  className={"material-btn " + (material === m ? "active" : "")}
+                  onClick={function () { setMaterial(m); }}
+                >
+                  {m}
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        <div className="section-title">Material aktif</div>
-        <div className="material-grid">
-          {MATERIALS.map(function (m) {
-            return (
-              <button
-                key={m}
-                className={"material-btn " + (material === m ? "active" : "")}
-                onClick={function () { setMaterial(m); }}
-              >
-                {m}
-              </button>
-            );
-          })}
-        </div>
+          <button
+            className="big-click-btn"
+            disabled={!selectedUnit || !material || loadingClick}
+            onClick={handleClick}
+          >
+            {loadingClick ? "..." : "+ RITASI"}
+          </button>
 
-        <button
-          className="big-click-btn"
-          disabled={!selectedUnit || !material || loadingClick}
-          onClick={handleClick}
-        >
-          {loadingClick ? "..." : "+ RITASI"}
-        </button>
-
-        <div className="stat-row">
-          <span>Ritasi jam ini ({recap ? recap.currentHour : "-"})</span>
-          <b>{currentHourData ? currentHourData.total : 0}</b>
+          <div className="stat-row">
+            <span>Ritasi jam ini ({recap ? recap.currentHour : "-"})</span>
+            <b>{currentHourData ? currentHourData.total : 0}</b>
+          </div>
+          <div className="stat-row">
+            <span>Total shift ini</span>
+            <b>{selectedUnitRecap ? selectedUnitRecap.total : 0}</b>
+          </div>
+          {!material && <div className="hint">Pilih material dulu sebelum klik ritasi.</div>}
         </div>
-        <div className="stat-row">
-          <span>Total shift ini</span>
-          <b>{selectedUnitRecap ? selectedUnitRecap.total : 0}</b>
-        </div>
-        {!material && <div className="hint">Pilih material dulu sebelum klik ritasi.</div>}
-      </div>
+      )}
 
       {isAdmin && (
         <div className="card">
@@ -461,7 +508,7 @@ export default function Home() {
 
       <div className="card">
         <div className="section-title">
-          {isAdmin ? "Rekap Per Jam - Shift Berjalan" : "Rekap Per Jam - Unit Kamu"}
+          {canMonitorAll ? "Rekap Per Jam - Shift Berjalan" : "Rekap Per Jam - Unit Kamu"}
         </div>
         <div className="hint" style={{ marginBottom: 8 }}>
           Kolom jam yang ditandai adalah jam yang sedang berjalan saat ini.
@@ -497,122 +544,9 @@ export default function Home() {
                   </tr>
                 );
               })}
-              {recap && isAdmin && (
+              {recap && canMonitorAll && (
                 <tr className="total-row">
                   <td>TOTAL</td>
                   {recap.grandHourlyTotals && recap.grandHourlyTotals.map(function (v, i) {
                     return (
-                      <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour" : ""}>
-                        {v}
-                      </td>
-                    );
-                  })}
-                  <td>{recap.grandTotal}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="section-title">Rincian Material</div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Unit</th>
-                <th>Total</th>
-                {MATERIALS.map(function (m) {
-                  return <th key={m}>{m}</th>;
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {recap && recap.units && recap.units.map(function (u) {
-                return (
-                  <tr key={u.id}>
-                    <td style={{ fontWeight: 700 }}>{u.name}</td>
-                    <td>{u.total}</td>
-                    {MATERIALS.map(function (m) {
-                      return <td key={m}>{(u.materialTotals && u.materialTotals[m]) || 0}</td>;
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="section-title">Riwayat & Revisi Ritasi</div>
-        <div className="hint" style={{ marginBottom: 8 }}>
-          Salah pencet material? Hapus entri yang salah di sini, lalu klik ulang yang benar.
-        </div>
-        {history.length === 0 && <div className="hint">Belum ada klik ritasi di shift ini.</div>}
-        {history.map(function (h) {
-          return (
-            <div key={h.id} className="history-row">
-              <div className="history-info">
-                <b>{h.unit_name}</b> - {h.material} - jam {String(h.jam).padStart(2, "0")}
-                <div className="hint">
-                  {h.operator_name || "(tanpa nama)"} - {new Date(h.clicked_at).toLocaleTimeString("id-ID")}
-                </div>
-              </div>
-              {(isAdmin || h.operator_id === authUser.id) && (
-                <button className="btn-mini-danger" onClick={function () { handleDeleteClick(h.id); }}>
-                  Hapus
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {isAdmin && (
-        <>
-          <div className="card">
-            <div className="section-title">1. Export Data (Preview — Tanpa Kunci Shift)</div>
-            <button
-              className="btn btn-secondary"
-              onClick={function () {
-                window.open("/api/shift/export?shiftId=" + (recap && recap.shift ? recap.shift.id : ""), "_blank");
-              }}
-              disabled={!recap || !recap.shift}
-            >
-              Export Excel (Preview)
-            </button>
-            <div className="hint">Download rekap sejauh ini TANPA mengunci shift — boleh dipakai kapan saja, berkali-kali, shift tetap berjalan seperti biasa.</div>
-          </div>
-
-          <div className="card">
-            <div className="section-title">2. Tutup Shift (Aksi Terpisah — Mengunci Data)</div>
-            <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
-              {closing ? "Menutup shift..." : "Tutup Shift"}
-            </button>
-            <div className="hint">Tombol ini HANYA mengunci shift, TIDAK ikut export apa pun. Kalau butuh file Excel dari shift yang sudah ditutup, download lewat "Riwayat Shift" di bawah.</div>
-          </div>
-
-          {pastShifts.length > 0 && (
-            <div className="card">
-              <div className="section-title">Riwayat Shift</div>
-              {pastShifts.map(function (s) {
-                return (
-                  <div key={s.id} className="stat-row">
-                    <span>{s.label}</span>
-                    <a href={"/api/shift/export?shiftId=" + s.id} target="_blank" rel="noreferrer">
-                      Download
-                    </a>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      <div className="app-footer">designed by Najib.dev</div>
-    </div>
-  );
-}
+                      <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour
