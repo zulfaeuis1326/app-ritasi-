@@ -4,7 +4,17 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { atLeast } from "../lib/roles";
+import { atLeast, ROLE_LABEL } from "../lib/roles";
+
+const MATERIALS = ["OB", "COAL", "SOIL", "SOLU", "MUD"];
+
+function formatJamCell(h) {
+  if (!h || h.total === 0) return "-";
+  const entries = Object.entries(h.materials);
+  if (entries.length === 1) return entries[0][0] + " x" + h.total;
+  const rincian = entries.map(function (e) { return e[0] + ":" + e[1]; }).join(", ");
+  return h.total + " (" + rincian + ")";
+}
 
 const MATERIAL_COLORS = {
   OB: "#1f3864",
@@ -20,6 +30,7 @@ export default function Dashboard() {
   const [range, setRange] = useState("day");
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [recap, setRecap] = useState(null);
 
   useEffect(() => {
     function checkAuth() {
@@ -56,12 +67,25 @@ export default function Dashboard() {
     }
   }, [range]);
 
+  const loadRecap = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ritasi");
+      if (res.ok) setRecap(await res.json());
+    } catch (err) {
+      // diamkan - tabel unit cukup gagal senyap, chart di atas tetap jalan
+    }
+  }, []);
+
   useEffect(() => {
     if (!authUser) return;
     loadData();
-    const poll = setInterval(loadData, 15000);
+    loadRecap();
+    const poll = setInterval(() => {
+      loadData();
+      loadRecap();
+    }, 15000);
     return () => clearInterval(poll);
-  }, [authUser, loadData]);
+  }, [authUser, loadData, loadRecap]);
 
   if (authUser === undefined || authUser === null) {
     return (
@@ -75,7 +99,12 @@ export default function Dashboard() {
     <div className="container">
       <div className="card header-card">
         <div className="clock" style={{ fontSize: 22 }}>Dashboard Analitik</div>
-        <div className="hint" style={{ textAlign: "center" }}>Login sebagai {authUser.username} (Admin)</div>
+        <div className="hint" style={{ textAlign: "center" }}>
+          Login sebagai {authUser.username} ({ROLE_LABEL[authUser.role] || authUser.role})
+        </div>
+        <a href="/" className="hint" style={{ display: "block", textAlign: "center", marginTop: 6 }}>
+          Buka Halaman Monitoring
+        </a>
       </div>
 
       <div className="card">
@@ -93,9 +122,6 @@ export default function Dashboard() {
             Per Shift (10 shift)
           </button>
         </div>
-        <a href="/" className="hint" style={{ display: "block", textAlign: "center", marginTop: 10 }}>
-          ← Kembali ke halaman input
-        </a>
       </div>
 
       {error && (
@@ -169,7 +195,95 @@ export default function Dashboard() {
         </>
       )}
 
+      <div className="card">
+        <div className="section-title">Rekap Per Jam - Shift Berjalan (Semua Unit)</div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          Kolom jam yang ditandai adalah jam yang sedang berjalan saat ini.
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Unit</th>
+                {recap && recap.hours && recap.hours.map(function (h) {
+                  return (
+                    <th key={h} className={h === recap.currentHour ? "current-hour" : ""}>
+                      {String(h).padStart(2, "0")}
+                    </th>
+                  );
+                })}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recap && recap.units && recap.units.map(function (u) {
+                return (
+                  <tr key={u.id}>
+                    <td style={{ fontWeight: 700 }}>{u.name}</td>
+                    {u.hourly.map(function (h) {
+                      return (
+                        <td key={h.jam} className={h.jam === recap.currentHour ? "current-hour" : ""}>
+                          {formatJamCell(h)}
+                        </td>
+                      );
+                    })}
+                    <td style={{ fontWeight: 700 }}>{u.total}</td>
+                  </tr>
+                );
+              })}
+              {recap && (!recap.units || recap.units.length === 0) && (
+                <tr><td colSpan={2} className="hint">Belum ada unit/data di shift ini.</td></tr>
+              )}
+              {recap && (
+                <tr className="total-row">
+                  <td>TOTAL</td>
+                  {recap.grandHourlyTotals && recap.grandHourlyTotals.map(function (v, i) {
+                    return (
+                      <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour" : ""}>
+                        {v}
+                      </td>
+                    );
+                  })}
+                  <td>{recap.grandTotal}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="section-title">Rincian Material - Shift Berjalan</div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Total</th>
+                {MATERIALS.map(function (m) {
+                  return <th key={m}>{m}</th>;
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {recap && recap.units && recap.units.map(function (u) {
+                return (
+                  <tr key={u.id}>
+                    <td style={{ fontWeight: 700 }}>{u.name}</td>
+                    <td>{u.total}</td>
+                    {MATERIALS.map(function (m) {
+                      return <td key={m}>{(u.materialTotals && u.materialTotals[m]) || 0}</td>;
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-}
+              }
+        
