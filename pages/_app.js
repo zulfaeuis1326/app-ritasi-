@@ -1,5 +1,7 @@
 import Head from "next/head";
+import Script from "next/script";
 import "../styles/globals.css";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default function App({ Component, pageProps }) {
   return (
@@ -12,6 +14,18 @@ export default function App({ Component, pageProps }) {
           rel="stylesheet"
         />
       </Head>
+      <Script id="theme-init" strategy="beforeInteractive">
+        {`
+          try {
+            var saved = window.localStorage.getItem("ritasi-theme");
+            var theme = (saved === "dark" || saved === "light") ? saved : "light";
+            document.documentElement.setAttribute("data-theme", theme);
+          } catch (err) {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        `}
+      </Script>
+      <ThemeToggle />
       <Component {...pageProps} />
     </>
   );
