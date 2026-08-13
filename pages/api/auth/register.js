@@ -11,9 +11,9 @@ export default async function handler(req, res) {
     }
 
     const { username, password } = req.body || {};
-    if (!username || !username.trim() || !password || password.length < 4) {
+    if (!username || !username.trim() || !password || password.length < 8) {
       return res.status(400).json({
-        error: "Username wajib diisi dan password minimal 4 karakter",
+        error: "Username wajib diisi dan password minimal 8 karakter",
       });
     }
 
