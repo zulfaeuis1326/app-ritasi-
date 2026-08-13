@@ -549,4 +549,117 @@ export default function Home() {
                   <td>TOTAL</td>
                   {recap.grandHourlyTotals && recap.grandHourlyTotals.map(function (v, i) {
                     return (
-                      <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour
+                      <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour" : ""}>
+                        {v}
+                      </td>
+                    );
+                  })}
+                  <td>{recap.grandTotal}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="section-title">Rincian Material</div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Total</th>
+                {MATERIALS.map(function (m) {
+                  return <th key={m}>{m}</th>;
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {recap && recap.units && recap.units.map(function (u) {
+                return (
+                  <tr key={u.id}>
+                    <td style={{ fontWeight: 700 }}>{u.name}</td>
+                    <td>{u.total}</td>
+                    {MATERIALS.map(function (m) {
+                      return <td key={m}>{(u.materialTotals && u.materialTotals[m]) || 0}</td>;
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="section-title">Riwayat & Revisi Ritasi</div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          Salah pencet material? Hapus entri yang salah di sini, lalu klik ulang yang benar.
+        </div>
+        {history.length === 0 && <div className="hint">Belum ada klik ritasi di shift ini.</div>}
+        {history.map(function (h) {
+          return (
+            <div key={h.id} className="history-row">
+              <div className="history-info">
+                <b>{h.unit_name}</b> - {h.material} - jam {String(h.jam).padStart(2, "0")}
+                <div className="hint">
+                  {h.operator_name || "(tanpa nama)"} - {new Date(h.clicked_at).toLocaleTimeString("id-ID")}
+                </div>
+              </div>
+              {(isAdmin || h.operator_id === authUser.id) && (
+                <button className="btn-mini-danger" onClick={function () { handleDeleteClick(h.id); }}>
+                  Hapus
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {canMonitorAll && (
+        <>
+          <div className="card">
+            <div className="section-title">1. Export Data (Preview — Tanpa Kunci Shift)</div>
+            <button
+              className="btn btn-secondary"
+              onClick={function () {
+                window.open("/api/shift/export?shiftId=" + (recap && recap.shift ? recap.shift.id : ""), "_blank");
+              }}
+              disabled={!recap || !recap.shift}
+            >
+              Export Excel (Preview)
+            </button>
+            <div className="hint">Download rekap sejauh ini TANPA mengunci shift — boleh dipakai kapan saja, berkali-kali, shift tetap berjalan seperti biasa.</div>
+          </div>
+
+          <div className="card">
+            <div className="section-title">2. Tutup Shift (Aksi Terpisah — Mengunci Data)</div>
+            <button className="btn btn-danger" onClick={handleCloseShift} disabled={closing}>
+              {closing ? "Menutup shift..." : "Tutup Shift"}
+            </button>
+            <div className="hint">Tombol ini HANYA mengunci shift, TIDAK ikut export apa pun. Kalau butuh file Excel dari shift yang sudah ditutup, download lewat "Riwayat Shift" di bawah.</div>
+          </div>
+
+          {pastShifts.length > 0 && (
+            <div className="card">
+              <div className="section-title">Riwayat Shift</div>
+              {pastShifts.map(function (s) {
+                return (
+                  <div key={s.id} className="stat-row">
+                    <span>{s.label}</span>
+                    <a href={"/api/shift/export?shiftId=" + s.id} target="_blank" rel="noreferrer">
+                      Download
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="app-footer">designed by Najib.dev</div>
+    </div>
+  );
+}
