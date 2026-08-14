@@ -1,6 +1,6 @@
 const { pool, ensureSchema } = require("../../lib/db");
 const { getOrCreateOpenShift } = require("../../lib/shift");
-const { buildRecap } = require("../../lib/recap");
+const { buildRecap, isHourWithinShift } = require("../../lib/recap");
 const { nowParts, TZ_NAME, OFFSET_HOURS } = require("../../lib/time");
 const { MATERIALS } = require("../../lib/materials");
 const { getUserFromReq } = require("../../lib/auth");
@@ -29,7 +29,22 @@ export default async function handler(req, res) {
       }
 
       const shift = await getOrCreateOpenShift();
-      const jam = nowParts().hour;
+      const currentHour = nowParts().hour;
+
+      // Jam manual (opsional) — buat nutup ritasi yang kelewat karena operator baru bisa
+      // input pas unit berhenti (gak boleh pegang HP saat jalan). Default: jam sekarang.
+      let jam = currentHour;
+      const rawJam = req.body?.jam;
+      if (rawJam !== undefined && rawJam !== null && rawJam !== "") {
+        const requestedJam = Number(rawJam);
+        if (!Number.isInteger(requestedJam) || requestedJam < 0 || requestedJam > 23) {
+          return res.status(400).json({ error: "Jam tidak valid" });
+        }
+        if (!isHourWithinShift(shift.shift_type, requestedJam, currentHour)) {
+          return res.status(400).json({ error: "Jam yang dipilih di luar rentang shift berjalan (tidak boleh jam yang belum terjadi)" });
+        }
+        jam = requestedJam;
+      }
 
       await pool.query(
         `INSERT INTO ritasi_clicks (unit_id, shift_id, material, jam, operator_id) VALUES ($1, $2, $3, $4, $5)`,
@@ -37,7 +52,7 @@ export default async function handler(req, res) {
       );
 
       const recap = await buildRecap(shift.id, lockedUnitId, lockedOperatorId);
-      return res.status(201).json({ currentHour: jam, tzInfo: `${TZ_NAME} (UTC+${OFFSET_HOURS})`, ...recap });
+      return res.status(201).json({ currentHour, tzInfo: `${TZ_NAME} (UTC+${OFFSET_HOURS})`, ...recap });
     }
 
     if (req.method === "GET") {
