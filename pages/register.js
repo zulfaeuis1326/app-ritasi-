@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function EyeIcon() {
   return (
@@ -18,12 +18,28 @@ function EyeOffIcon() {
   );
 }
 
+const JABATAN_OPTIONS = [
+  { value: "operator", label: "Operator" },
+  { value: "pengawas", label: "Pengawas" },
+];
+
 export default function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [jabatan, setJabatan] = useState("operator");
+  const [units, setUnits] = useState([]);
+  const [selectedUnitId, setSelectedUnitId] = useState("");
+  const [newUnitName, setNewUnitName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(function () {
+    fetch("/api/units")
+      .then(function (res) { return res.json(); })
+      .then(function (data) { if (Array.isArray(data)) setUnits(data); })
+      .catch(function () { /* daftar unit gagal dimuat - tetap bisa daftarkan unit baru manual */ });
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -32,12 +48,22 @@ export default function Register() {
       setError("Password minimal 8 karakter");
       return;
     }
+    if (jabatan === "operator" && !selectedUnitId && !newUnitName.trim()) {
+      setError("Operator wajib pilih unit yang sudah ada atau daftarkan unit baru");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          role: jabatan,
+          unitId: jabatan === "operator" ? selectedUnitId : undefined,
+          newUnitName: jabatan === "operator" ? newUnitName : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -95,6 +121,46 @@ export default function Register() {
             </div>
             <div className="field-hint">Minimal 8 karakter</div>
           </div>
+
+          <div className="field-group">
+            <label className="field-label" htmlFor="jabatan">Jabatan</label>
+            <select
+              id="jabatan"
+              className="field-input"
+              value={jabatan}
+              onChange={function (e) { setJabatan(e.target.value); }}
+            >
+              {JABATAN_OPTIONS.map(function (opt) {
+                return <option key={opt.value} value={opt.value}>{opt.label}</option>;
+              })}
+            </select>
+            <div className="field-hint">Jabatan Admin hanya bisa diberikan manual oleh superadmin.</div>
+          </div>
+
+          {jabatan === "operator" && (
+            <div className="field-group">
+              <label className="field-label" htmlFor="unit">Unit Kamu</label>
+              <select
+                id="unit"
+                className="field-input"
+                value={selectedUnitId}
+                onChange={function (e) { setSelectedUnitId(e.target.value); }}
+                style={{ marginBottom: 8 }}
+              >
+                <option value="">-- Pilih unit yang sudah ada --</option>
+                {units.map(function (u) {
+                  return <option key={u.id} value={u.id}>{u.name}</option>;
+                })}
+              </select>
+              <input
+                className="field-input"
+                value={newUnitName}
+                onChange={function (e) { setNewUnitName(e.target.value); }}
+                placeholder="Atau ketik nomor unit baru, misal HD-07"
+              />
+              <div className="field-hint">Pilih salah satu: dari daftar di atas, atau ketik nomor unit baru kalau belum terdaftar.</div>
+            </div>
+          )}
 
           {error && <div className="field-error">{error}</div>}
 
