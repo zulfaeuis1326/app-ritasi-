@@ -419,7 +419,7 @@ export default function Home() {
           onLoad={function () { setLogoFailed(false); }}
         />
         {logoFailed && (
-          <div className="hint" style={{ textAlign: "center", color: "#e63946" }}>
+          <div className="hint" style={{ textAlign: "center", color: "var(--danger)" }}>
             Logo belum ditemukan di /logo.png - cek lagi file ada di folder public/ repo
           </div>
         )}
@@ -460,7 +460,7 @@ export default function Home() {
               {selectedUnit && (
                 <button
                   className="btn"
-                  style={{ background: "transparent", color: "#e63946", border: "1px solid #e63946", marginBottom: 10 }}
+                  style={{ background: "transparent", color: "var(--danger)", border: "1px solid var(--danger)", marginBottom: 10 }}
                   onClick={function () { handleDeleteUnit(selectedUnit); }}
                 >
                   Hapus Unit Ini
@@ -468,7 +468,7 @@ export default function Home() {
               )}
             </>
           ) : (
-            <div className="hint" style={{ fontSize: 16, color: "#f2f0ea", marginBottom: 10 }}>
+            <div className="hint" style={{ fontSize: 16, color: "var(--text)", marginBottom: 10 }}>
               Unit kamu: <b>{authUser.unit_name}</b> (terkunci sampai logout — logout & login lagi untuk ganti unit)
             </div>
           )}
@@ -549,4 +549,4 @@ export default function Home() {
       )}
 
       <div className="card">
-        <div className="section-t
+        <di
