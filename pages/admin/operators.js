@@ -116,7 +116,7 @@ export default function AdminOperators() {
       </div>
 
       {error && (
-        <div className="card"><div className="hint" style={{ color: "#e63946" }}>Error: {error}</div></div>
+        <div className="card"><div className="hint" style={{ color: "var(--danger)" }}>Error: {error}</div></div>
       )}
 
       <div className="card">
@@ -171,4 +171,4 @@ export default function AdminOperators() {
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-        }
+                        }
