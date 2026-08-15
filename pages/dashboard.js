@@ -125,7 +125,7 @@ export default function Dashboard() {
       </div>
 
       {error && (
-        <div className="card"><div className="hint" style={{ color: "#b91c1c" }}>Error: {error}</div></div>
+        <div className="card"><div className="hint" style={{ color: "var(--danger)" }}>Error: {error}</div></div>
       )}
 
       {data && (
@@ -285,5 +285,5 @@ export default function Dashboard() {
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-              }
-        
+        }
+                    
