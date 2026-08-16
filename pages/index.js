@@ -1,9 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from "recharts";
 import { atLeast, ROLE_LABEL } from "../lib/roles";
 
 const MATERIALS = ["OB", "COAL", "SOIL", "SOLU", "MUD"];
@@ -16,86 +12,408 @@ function formatJamCell(h) {
   return h.total + " (" + rincian + ")";
 }
 
-const MATERIAL_COLORS = {
-  OB: "#1f3864",
-  COAL: "#374151",
-  SOIL: "#b45309",
-  SOLU: "#0891b2",
-  MUD: "#65a30d",
-};
+// Daftar jam yang boleh dipilih manual: dari awal shift sampai jam sekarang (kronologis).
+// Dipakai buat nutup ritasi yang kelewat (operator gak boleh pegang HP saat unit jalan).
+function buildSelectableHours(shiftType, currentHour) {
+  const start = shiftType === 1 ? 7 : 19;
+  const rel = (h) => (h - start + 24) % 24;
+  const maxRel = rel(currentHour);
+  const result = [];
+  for (let r = 0; r <= maxRel; r++) {
+    result.push((start + r) % 24);
+  }
+  return result;
+}
 
-export default function Dashboard() {
+export default function Home() {
   const router = useRouter();
   const [authUser, setAuthUser] = useState(undefined);
-  const [range, setRange] = useState("day");
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [recap, setRecap] = useState(null);
+  const [clock, setClock] = useState("");
+  const [units, setUnits] = useState([]);
+  const [selectedUnit, setSelectedUnit] = useState("");
+  const [material, setMaterial] = useState("");
+  const [selectedJam, setSelectedJam] = useState("");
   const [showAllUnits, setShowAllUnits] = useState(false);
+  const [recap, setRecap] = useState(null);
+  const [recapError, setRecapError] = useState(null);
+  const [newUnitName, setNewUnitName] = useState("");
+  const [loadingClick, setLoadingClick] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [pastShifts, setPastShifts] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const [cacheBuster] = useState(function () { return Date.now(); });
 
-  useEffect(() => {
+  // Khusus operator yang belum pilih unit (setup sekali di awal)
+  const [setupUnits, setSetupUnits] = useState([]);
+  const [settingUnit, setSettingUnit] = useState(false);
+
+  const isAdmin = !!authUser && atLeast(authUser.role, "admin");
+  const isOperator = !!authUser && authUser.role === "operator";
+  const isPengawas = !!authUser && authUser.role === "pengawas";
+  const canMonitorAll = !!authUser && atLeast(authUser.role, "pengawas");
+  const canClickRitasi = !!authUser && (isOperator || isAdmin);
+  const needsUnitSetup = isOperator && !authUser.unit_id;
+
+  // Khusus operator setup awal: daftarkan unit baru sendiri (bukan pilih dari list)
+  const [newSetupUnitName, setNewSetupUnitName] = useState("");
+
+  const loadUnits = useCallback(async function () {
+    const res = await fetch("/api/units");
+    const data = await res.json();
+    setUnits(data);
+  }, []);
+
+  const loadRecap = useCallback(async function () {
+    try {
+      const res = await fetch("/api/ritasi");
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(function () { return {}; });
+        setRecapError(data.error || ("Error " + res.status));
+        return;
+      }
+      const data = await res.json();
+      setRecap(data);
+      setRecapError(null);
+    } catch (err) {
+      setRecapError(err.message);
+    }
+  }, [router]);
+
+  const loadPastShifts = useCallback(async function () {
+    const res = await fetch("/api/shift/list");
+    const data = await res.json();
+    setPastShifts(data.filter(function (s) { return s.status === "closed"; }));
+  }, []);
+
+  const loadHistory = useCallback(async function () {
+    try {
+      const res = await fetch("/api/ritasi/history");
+      if (!res.ok) return;
+      const data = await res.json();
+      setHistory(data.clicks || []);
+    } catch (err) {
+      // diamkan — bukan bagian kritis
+    }
+  }, []);
+
+  useEffect(function () {
     function checkAuth() {
       fetch("/api/auth/me", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((d) => {
-          if (!d.user) router.push("/login");
-          else if (!atLeast(d.user.role, "pengawas")) router.push("/");
-          else setAuthUser(d.user);
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data.user) {
+            router.push("/login");
+          } else {
+            setAuthUser(data.user);
+          }
         })
-        .catch(() => router.push("/login"));
+        .catch(function () { router.push("/login"); });
     }
     checkAuth();
 
     function handlePageShow(e) {
-      if (e.persisted) window.location.reload();
+      if (e.persisted) {
+        window.location.reload();
+      }
     }
     window.addEventListener("pageshow", handlePageShow);
-    return () => window.removeEventListener("pageshow", handlePageShow);
+    return function () { window.removeEventListener("pageshow", handlePageShow); };
   }, [router]);
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/dashboard?range=${range}`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error || `Error ${res.status}`);
-        return;
-      }
-      setData(await res.json());
-      setError(null);
-    } catch (err) {
-      setError(err.message);
+  // Operator: kunci selectedUnit ke unit mereka sendiri. Admin: bebas pilih dari daftar unit.
+  useEffect(function () {
+    if (!authUser) return;
+    if (isOperator && authUser.unit_id) {
+      setSelectedUnit(String(authUser.unit_id));
     }
-  }, [range]);
+  }, [authUser, isOperator]);
 
-  const loadRecap = useCallback(async () => {
-    try {
-      const res = await fetch("/api/ritasi");
-      if (res.ok) setRecap(await res.json());
-    } catch (err) {
-      // diamkan - tabel unit cukup gagal senyap, chart di atas tetap jalan
+  useEffect(function () {
+    if (!authUser || needsUnitSetup) return;
+    if (isAdmin) {
+      loadUnits();
     }
+    if (canMonitorAll) {
+      loadPastShifts();
+    }
+    loadRecap();
+    loadHistory();
+    const poll = setInterval(function () {
+      loadRecap();
+      loadHistory();
+    }, 5000);
+    return function () { clearInterval(poll); };
+  }, [authUser, needsUnitSetup, isAdmin, canMonitorAll, loadUnits, loadRecap, loadPastShifts, loadHistory]);
+
+  // Auto-perbaiki selectedUnit kalau nyasar/dihapus — cuma berlaku buat admin,
+  // operator sudah dikunci di effect sebelumnya.
+  useEffect(function () {
+    if (!isAdmin) return;
+    if (units.length === 0) {
+      if (selectedUnit !== "") setSelectedUnit("");
+      return;
+    }
+    const stillValid = units.some(function (u) { return String(u.id) === selectedUnit; });
+    if (!stillValid) setSelectedUnit(String(units[0].id));
+  }, [units, selectedUnit, isAdmin]);
+
+  useEffect(function () {
+    function tick() { setClock(new Date().toLocaleTimeString("id-ID")); }
+    tick();
+    const t = setInterval(tick, 1000);
+    return function () { clearInterval(t); };
   }, []);
 
-  useEffect(() => {
-    if (!authUser) return;
-    loadData();
-    loadRecap();
-    const poll = setInterval(() => {
-      loadData();
-      loadRecap();
-    }, 15000);
-    return () => clearInterval(poll);
-  }, [authUser, loadData, loadRecap]);
+  // Ambil daftar unit buat layar setup sekali di awal (operator baru, belum pilih unit)
+  useEffect(function () {
+    if (!needsUnitSetup) return;
+    fetch("/api/units")
+      .then(function (res) { return res.json(); })
+      .then(function (data) { setSetupUnits(data); })
+      .catch(function () { setSetupUnits([]); });
+  }, [needsUnitSetup]);
 
+  async function handleSetUnit(unitId) {
+    if (!confirm("Kunci akun kamu ke unit ini untuk sesi login sekarang? Kalau mau ganti unit, logout dulu lalu login lagi.")) return;
+    setSettingUnit(true);
+    try {
+      const res = await fetch("/api/auth/set-unit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unitId: unitId }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal memilih unit: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal memilih unit (koneksi/server bermasalah): " + err.message);
+    } finally {
+      setSettingUnit(false);
+    }
+  }
+
+  async function handleRegisterOwnUnit(e) {
+    e.preventDefault();
+    if (!newSetupUnitName.trim()) return;
+    if (!confirm("Daftarkan unit \"" + newSetupUnitName.trim() + "\" dan langsung pakai unit ini? Kalau mau ganti nanti, logout dulu lalu login lagi.")) return;
+    setSettingUnit(true);
+    try {
+      const res = await fetch("/api/auth/set-unit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newUnitName: newSetupUnitName.trim() }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal mendaftarkan unit: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal mendaftarkan unit (koneksi/server bermasalah): " + err.message);
+    } finally {
+      setSettingUnit(false);
+    }
+  }
+
+  async function handleClick() {
+    if (!selectedUnit) {
+      alert("Pilih unit dulu.");
+      return;
+    }
+    if (!material) {
+      alert("Pilih material dulu.");
+      return;
+    }
+    setLoadingClick(true);
+    try {
+      const res = await fetch("/api/ritasi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unitId: Number(selectedUnit),
+          material: material,
+          jam: selectedJam === "" ? undefined : Number(selectedJam),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal mencatat ritasi: " + (data.error || res.status));
+        return;
+      }
+      const data = await res.json();
+      setRecap(data);
+      setSelectedJam(""); // balik ke default (jam sekarang) buat klik berikutnya
+      loadHistory();
+    } catch (err) {
+      alert("Gagal mencatat ritasi (koneksi/server bermasalah): " + err.message);
+    } finally {
+      setLoadingClick(false);
+    }
+  }
+
+  async function handleDeleteClick(clickId) {
+    if (!confirm("Hapus entri ritasi ini? Aksi ini untuk koreksi klik yang salah.")) return;
+    try {
+      const res = await fetch("/api/ritasi/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: clickId }),
+      });
+      if (res.ok) {
+        await loadRecap();
+        await loadHistory();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal menghapus entri: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal menghapus entri (koneksi/server bermasalah): " + err.message);
+    }
+  }
+
+  async function handleDeleteUnit(unitId) {
+    const unit = units.find(function (u) { return String(u.id) === String(unitId); });
+    const unitName = unit ? unit.name : "";
+    if (!confirm("Hapus unit \"" + unitName + "\"? Riwayat ritasi unit ini di shift-shift sebelumnya tetap tersimpan, tapi unit ini tidak akan muncul lagi untuk input baru.")) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/units", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(unitId) }),
+      });
+      if (res.ok) {
+        setSelectedUnit("");
+        await loadUnits();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal menghapus unit: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal menghapus unit (koneksi/server bermasalah): " + err.message);
+    }
+  }
+
+  async function handleAddUnit(e) {
+    e.preventDefault();
+    if (!newUnitName.trim()) return;
+    try {
+      const res = await fetch("/api/units", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newUnitName.trim() }),
+      });
+      if (res.ok) {
+        setNewUnitName("");
+        await loadUnits();
+      } else {
+        const data = await res.json().catch(function () { return {}; });
+        alert("Gagal menambah unit: " + (data.error || res.status));
+      }
+    } catch (err) {
+      alert("Gagal menambah unit (koneksi/server bermasalah): " + err.message);
+    }
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
+  async function handleCloseShift() {
+    if (!confirm("Yakin tutup shift sekarang? Data shift ini akan dikunci (tidak otomatis export — export dilakukan terpisah).")) return;
+    setClosing(true);
+    try {
+      await fetch("/api/shift/close", { method: "POST" });
+      await loadRecap();
+      await loadPastShifts();
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  const selectedUnitRecap = recap && recap.units
+    ? recap.units.find(function (u) { return String(u.id) === selectedUnit; })
+    : null;
+  const currentHourData = selectedUnitRecap && selectedUnitRecap.hourly
+    ? selectedUnitRecap.hourly.find(function (h) { return h.jam === (recap ? recap.currentHour : null); })
+    : null;
+
+  // Sembunyikan unit yang belum ada ritasi sama sekali di shift ini (biar tabel gak
+  // penuh puluhan/ratusan unit kosong) — kecuali operator (yang cuma lihat unit sendiri)
+  // atau toggle "tampilkan semua" dinyalain.
   const allRecapUnits = (recap && recap.units) || [];
-  const visibleUnits = showAllUnits ? allRecapUnits : allRecapUnits.filter((u) => u.total > 0);
+  const visibleUnits = (canMonitorAll && !showAllUnits)
+    ? allRecapUnits.filter(function (u) { return u.total > 0; })
+    : allRecapUnits;
   const hiddenUnitCount = allRecapUnits.length - visibleUnits.length;
 
-  if (authUser === undefined || authUser === null) {
+  if (authUser === undefined) {
     return (
       <div className="container">
         <div className="card"><div className="hint">Memuat...</div></div>
+      </div>
+    );
+  }
+  if (authUser === null) {
+    return null;
+  }
+
+  // Layar setup sekali di awal — operator baru wajib pilih unit dulu sebelum bisa apa-apa
+  if (needsUnitSetup) {
+    return (
+      <div className="container">
+        <div className="card header-card">
+          <div className="clock" style={{ fontSize: 22 }}>Pilih Unit Kamu</div>
+          <div className="hint" style={{ textAlign: "center" }}>
+            Halo {authUser.username} — pilih 1 unit yang akan kamu operasikan. Setelah dipilih,
+            unit ini terkunci sampai kamu logout. Mau ganti unit? Logout dulu, lalu login lagi.
+          </div>
+        </div>
+        <div className="card">
+          {setupUnits.length === 0 && <div className="hint">Belum ada unit terdaftar — daftarkan unit kamu sendiri di bawah.</div>}
+          {setupUnits.map(function (u) {
+            return (
+              <button
+                key={u.id}
+                className="btn btn-secondary"
+                disabled={settingUnit}
+                onClick={function () { handleSetUnit(u.id); }}
+              >
+                {u.name}
+              </button>
+            );
+          })}
+        </div>
+        <div className="card">
+          <div className="section-title">Nomor unit kamu tidak ada di atas?</div>
+          <form onSubmit={handleRegisterOwnUnit} style={{ display: "flex", gap: 8 }}>
+            <input
+              value={newSetupUnitName}
+              onChange={function (e) { setNewSetupUnitName(e.target.value); }}
+              placeholder="Contoh: HD-07"
+              style={{ flex: 1 }}
+              disabled={settingUnit}
+            />
+            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }} disabled={settingUnit}>
+              Daftarkan
+            </button>
+          </form>
+          <div className="hint">Ketik nomor unit kamu sendiri kalau belum ada di daftar tombol di atas.</div>
+        </div>
+        <div className="card">
+          <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
+        </div>
       </div>
     );
   }
@@ -103,200 +421,125 @@ export default function Dashboard() {
   return (
     <div className="container">
       <div className="card header-card">
-        <div className="clock" style={{ fontSize: 22 }}>Dashboard Analitik</div>
-        <div className="hint" style={{ textAlign: "center" }}>
-          Login sebagai {authUser.username} ({ROLE_LABEL[authUser.role] || authUser.role})
+        <img
+          src={"/logo.png?v=" + cacheBuster}
+          alt="Logo"
+          className="app-logo"
+          onError={function (e) { e.target.style.display = "none"; setLogoFailed(true); }}
+          onLoad={function () { setLogoFailed(false); }}
+        />
+        {logoFailed && (
+          <div className="hint" style={{ textAlign: "center", color: "var(--danger)" }}>
+            Logo belum ditemukan di /logo.png - cek lagi file ada di folder public/ repo
+          </div>
+        )}
+        <div className="clock">{clock}</div>
+        <div className="shift-label">
+          {recapError ? ("Error: " + recapError) : (recap && recap.shift ? recap.shift.label : "Memuat shift...")}
         </div>
-        <a href="/" className="hint" style={{ display: "block", textAlign: "center", marginTop: 6 }}>
-          Buka Halaman Monitoring
-        </a>
+        {recap && recap.tzInfo && (
+          <div className="hint" style={{ textAlign: "center" }}>Zona waktu server: {recap.tzInfo}</div>
+        )}
+        <div className="stat-row" style={{ marginTop: 12 }}>
+          <span>{authUser.username} ({ROLE_LABEL[authUser.role] || authUser.role})</span>
+          <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
+        </div>
+        {canMonitorAll && (
+          <a href="/dashboard" className="hint" style={{ display: "block", textAlign: "center", marginTop: 8 }}>
+            Buka Dashboard Analitik
+          </a>
+        )}
+        {canMonitorAll && (
+          <a href="/admin/fleet" className="hint" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+            Kelola Fleet
+          </a>
+        )}
+        {isAdmin && (
+          <a href="/admin/operators" className="hint" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+            Kelola Akun
+          </a>
+        )}
       </div>
 
-      <div className="card">
-        <div className="material-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <button
-            className={`material-btn ${range === "day" ? "active" : ""}`}
-            onClick={() => setRange("day")}
-          >
-            Per Hari (7 hari)
-          </button>
-          <button
-            className={`material-btn ${range === "shift" ? "active" : ""}`}
-            onClick={() => setRange("shift")}
-          >
-            Per Shift (10 shift)
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="card"><div className="hint" style={{ color: "var(--danger)" }}>Error: {error}</div></div>
-      )}
-
-      {data && (
-        <>
-          <div className="card">
-            <div className="section-title">Total Ritasi ({range === "day" ? "per Hari" : "per Shift"})</div>
-            <div className="hint" style={{ marginBottom: 8 }}>Grand total: <b>{data.grandTotal}</b></div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={data.bucketSeries}>
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="total" fill="#1f3864" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card">
-            <div className="section-title">Produksi per Unit</div>
-            <ResponsiveContainer width="100%" height={Math.max(180, data.unitSeries.length * 34)}>
-              <BarChart data={data.unitSeries} layout="vertical" margin={{ left: 20 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
-                <Tooltip />
-                <Bar dataKey="total" fill="#2563eb" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card">
-            <div className="section-title">Komposisi Material</div>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie
-                  data={data.materialSeries.filter((m) => m.total > 0)}
-                  dataKey="total"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={(entry) => `${entry.name}: ${entry.total}`}
+      {canClickRitasi && (
+        <div className="card">
+          <div className="section-title">Unit</div>
+          {isAdmin ? (
+            <>
+              <select value={selectedUnit} onChange={function (e) { setSelectedUnit(e.target.value); }}>
+                {units.length === 0 && <option value="">Belum ada unit</option>}
+                {units.map(function (u) {
+                  return <option key={u.id} value={u.id}>{u.name}</option>;
+                })}
+              </select>
+              {selectedUnit && (
+                <button
+                  className="btn"
+                  style={{ background: "transparent", color: "var(--danger)", border: "1px solid var(--danger)", marginBottom: 10 }}
+                  onClick={function () { handleDeleteUnit(selectedUnit); }}
                 >
-                  {data.materialSeries.map((m) => (
-                    <Cell key={m.name} fill={MATERIAL_COLORS[m.name] || "#888"} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card">
-            <div className="section-title">Tren Produksi per Jam</div>
-            <div className="hint" style={{ marginBottom: 8 }}>
-              Akumulasi semua {range === "day" ? "hari" : "shift"} dalam rentang ini, per jam (00–23).
+                  Hapus Unit Ini
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="hint" style={{ fontSize: 16, color: "var(--text)", marginBottom: 10 }}>
+              Unit kamu: <b>{authUser.unit_name}</b> (terkunci sampai logout — logout & login lagi untuk ganti unit)
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data.hourlySeries}>
-                <XAxis dataKey="hour" tickFormatter={(h) => String(h).padStart(2, "0")} tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip labelFormatter={(h) => `Jam ${String(h).padStart(2, "0")}`} />
-                <Line type="monotone" dataKey="total" stroke="#dc2626" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          )}
+
+          <div className="section-title">Material aktif</div>
+          <div className="material-grid">
+            {MATERIALS.map(function (m) {
+              return (
+                <button
+                  key={m}
+                  className={"material-btn " + (material === m ? "active" : "")}
+                  onClick={function () { setMaterial(m); }}
+                >
+                  {m}
+                </button>
+              );
+            })}
           </div>
-        </>
-      )}
 
-      <div className="card">
-        <div className="section-title">Rekap Per Jam - Shift Berjalan (Semua Unit)</div>
-        <div className="hint" style={{ marginBottom: 8 }}>
-          Kolom jam yang ditandai adalah jam yang sedang berjalan saat ini.
-          {hiddenUnitCount > 0 && !showAllUnits && (
-            <> {hiddenUnitCount} unit belum ada ritasi disembunyikan — <a href="#" onClick={function (e) { e.preventDefault(); setShowAllUnits(true); }}>tampilkan semua</a>.</>
-          )}
-          {showAllUnits && (
-            <> <a href="#" onClick={function (e) { e.preventDefault(); setShowAllUnits(false); }}>sembunyikan unit kosong</a>.</>
-          )}
-        </div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Unit</th>
-                {recap && recap.hours && recap.hours.map(function (h) {
-                  return (
-                    <th key={h} className={h === recap.currentHour ? "current-hour" : ""}>
-                      {String(h).padStart(2, "0")}
-                    </th>
-                  );
-                })}
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleUnits.map(function (u) {
+          <div className="section-title">Jam Ritasi</div>
+          <select
+            value={selectedJam}
+            onChange={function (e) { setSelectedJam(e.target.value); }}
+            style={{ marginBottom: 10 }}
+          >
+            <option value="">Sekarang ({recap ? String(recap.currentHour).padStart(2, "0") + ":00" : "-"})</option>
+            {recap && recap.shift && buildSelectableHours(recap.shift.shift_type, recap.currentHour)
+              .filter(function (h) { return h !== recap.currentHour; })
+              .map(function (h) {
                 return (
-                  <tr key={u.id}>
-                    <td style={{ fontWeight: 700 }}>{u.name}</td>
-                    {u.hourly.map(function (h) {
-                      return (
-                        <td key={h.jam} className={h.jam === recap.currentHour ? "current-hour" : ""}>
-                          {formatJamCell(h)}
-                        </td>
-                      );
-                    })}
-                    <td style={{ fontWeight: 700 }}>{u.total}</td>
-                  </tr>
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0") + ":00 (kelewat)"}
+                  </option>
                 );
               })}
-              {visibleUnits.length === 0 && (
-                <tr><td colSpan={2} className="hint">Belum ada ritasi di shift ini.</td></tr>
-              )}
-              {recap && (
-                <tr className="total-row">
-                  <td>TOTAL</td>
-                  {recap.grandHourlyTotals && recap.grandHourlyTotals.map(function (v, i) {
-                    return (
-                      <td key={i} className={recap.hours[i] === recap.currentHour ? "current-hour" : ""}>
-                        {v}
-                      </td>
-                    );
-                  })}
-                  <td>{recap.grandTotal}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          </select>
+          {selectedJam !== "" && (
+            <div className="hint" style={{ marginBottom: 8 }}>
+              Ritasi ini akan dicatat buat jam {String(selectedJam).padStart(2, "0")}:00 (bukan jam sekarang) — buat nutup yang kelewat.
+            </div>
+          )}
 
-      <div className="card">
-        <div className="section-title">Rincian Material - Shift Berjalan</div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Unit</th>
-                <th>Total</th>
-                {MATERIALS.map(function (m) {
-                  return <th key={m}>{m}</th>;
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {visibleUnits.map(function (u) {
-                return (
-                  <tr key={u.id}>
-                    <td style={{ fontWeight: 700 }}>{u.name}</td>
-                    <td>{u.total}</td>
-                    {MATERIALS.map(function (m) {
-                      return <td key={m}>{(u.materialTotals && u.materialTotals[m]) || 0}</td>;
-                    })}
-                  </tr>
-                );
-              })}
-              {visibleUnits.length === 0 && (
-                <tr><td colSpan={2 + MATERIALS.length} className="hint">Belum ada ritasi di shift ini.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          <button
+            className="big-click-btn"
+            disabled={!selectedUnit || !material || loadingClick}
+            onClick={handleClick}
+          >
+            {loadingClick ? "..." : "+ RITASI"}
+          </button>
 
-      <div className="app-footer">designed by Najib.dev</div>
-    </div>
-  );
-}
+          <div className="stat-row">
+            <span>Ritasi jam ini ({recap ? recap.currentHour : "-"})</span>
+            <b>{currentHourData ? currentHourData.total : 0}</b>
+          </div>
+          <div className="stat-row">
+            <span>Total shift ini</span>
+            <b>{selectedUnitRecap ? selectedUnitRecap.total : 0}</b>
+          </div>
+      
