@@ -306,6 +306,47 @@ thead th.current-hour {
   overflow-x: auto;
 }
 
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-display);
+}
+.badge-pc { background: var(--accent-soft); color: var(--accent); }
+.badge-hd { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+
+.list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.list-table th {
+  text-align: left;
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  font-size: 10.5px;
+  padding: 9px 10px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.list-table td {
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.list-table tbody tr:nth-child(even) { background: var(--surface-alt); }
+.list-table tbody tr:hover { background: var(--accent-soft); cursor: pointer; }
+.list-table tbody tr.row-selected { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
+
 .btn {
   padding: 13px;
   border-radius: 8px;
@@ -490,4 +531,4 @@ a { color: var(--accent); }
   font-size: 13.5px;
   color: var(--text-muted);
   margin-top: 22px;
-    }
+}
