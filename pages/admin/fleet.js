@@ -13,6 +13,9 @@ export default function KelolaFleet() {
   const [newFleetName, setNewFleetName] = useState("");
   const [newFleetPit, setNewFleetPit] = useState("");
   const [newPitName, setNewPitName] = useState("");
+  const [unitSearch, setUnitSearch] = useState("");
+  const [unitPitFilter, setUnitPitFilter] = useState("");
+  const [selectedUnitId, setSelectedUnitId] = useState("");
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -157,6 +160,13 @@ export default function KelolaFleet() {
     }
   }
 
+  const filteredUnits = units.filter((u) => {
+    const matchSearch = !unitSearch.trim() || u.name.toLowerCase().includes(unitSearch.trim().toLowerCase());
+    const matchPit = !unitPitFilter || String(u.pit_id) === unitPitFilter;
+    return matchSearch && matchPit;
+  });
+  const selectedUnit = units.find((u) => String(u.id) === selectedUnitId) || null;
+
   if (authUser === undefined || authUser === null) {
     return (
       <div className="container">
@@ -244,27 +254,57 @@ export default function KelolaFleet() {
       </div>
 
       <div className="card">
-        <div className="section-title">Assign HD ke Fleet — {units.length} unit</div>
+        <div className="section-title">Assign HD ke Fleet</div>
         <div className="hint" style={{ marginBottom: 8 }}>
-          Pilih fleet (PC) buat tiap unit HD. Juga bisa atur PIT masing-masing unit di sini
-          (independen dari PIT fleet-nya, kalau unit dipindah sendiri).
+          Cari unit, pilih dari dropdown, baru atur fleet & PIT-nya — biar gak scroll list panjang.
         </div>
-        {units.map((u) => (
-          <div key={u.id} className="history-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-            <b style={{ marginBottom: 6 }}>{u.name}</b>
+        <input
+          value={unitSearch}
+          onChange={(e) => setUnitSearch(e.target.value)}
+          placeholder="Ketik nomor unit, misal H572..."
+          style={{ marginBottom: 8 }}
+        />
+        <select
+          value={unitPitFilter}
+          onChange={(e) => setUnitPitFilter(e.target.value)}
+          style={{ marginBottom: 8 }}
+        >
+          <option value="">-- Semua PIT --</option>
+          {pits.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+        <select
+          value={selectedUnitId}
+          onChange={(e) => setSelectedUnitId(e.target.value)}
+          style={{ marginBottom: 10 }}
+        >
+          <option value="">-- Pilih unit --</option>
+          {filteredUnits.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name} {u.fleet_name ? `(fleet: ${u.fleet_name})` : "(belum ada fleet)"}
+            </option>
+          ))}
+        </select>
+
+        {selectedUnit && (
+          <div style={{ padding: 10, background: "var(--surface-alt)", borderRadius: 8, marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{selectedUnit.name}</div>
+            <div className="field-label" style={{ marginBottom: 4 }}>Fleet (PC)</div>
             <select
-              value={u.fleet_id || ""}
-              onChange={(e) => handleAssignFleet(u.id, e.target.value)}
-              style={{ marginBottom: 6 }}
+              value={selectedUnit.fleet_id || ""}
+              onChange={(e) => handleAssignFleet(selectedUnit.id, e.target.value)}
+              style={{ marginBottom: 10 }}
             >
               <option value="">-- Belum gabung fleet --</option>
               {fleets.map((f) => (
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
+            <div className="field-label" style={{ marginBottom: 4 }}>PIT</div>
             <select
-              value={u.pit_id || ""}
-              onChange={(e) => handleSetUnitPit(u.id, e.target.value)}
+              value={selectedUnit.pit_id || ""}
+              onChange={(e) => handleSetUnitPit(selectedUnit.id, e.target.value)}
             >
               <option value="">-- Belum ada PIT --</option>
               {pits.map((p) => (
@@ -272,11 +312,32 @@ export default function KelolaFleet() {
               ))}
             </select>
           </div>
-        ))}
+        )}
+
+        <div className="section-title" style={{ marginTop: 4 }}>
+          Ringkasan Semua Unit ({filteredUnits.length}/{units.length})
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Unit</th><th>Fleet</th><th>PIT</th></tr>
+            </thead>
+            <tbody>
+              {filteredUnits.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.name}</td>
+                  <td>{u.fleet_name || "-"}</td>
+                  <td>{u.pit_name || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {units.length === 0 && <div className="hint">Belum ada unit HD.</div>}
       </div>
 
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-}
+              }
+          
