@@ -95,6 +95,28 @@ export default function AdminOperators() {
     }
   }
 
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  async function handleImportRoster() {
+    if (!confirm("Import 42 PC + 124 HD dari data roster ke database? Aman diulang (yang udah ada dilewati, gak dobel).")) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await fetch("/api/admin/import-roster", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setImportResult(data);
+      } else {
+        alert(`Gagal import: ${data.error || res.status}`);
+      }
+    } catch (err) {
+      alert(`Gagal import (koneksi/server bermasalah): ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   if (authUser === undefined || authUser === null) {
     return (
       <div className="container">
@@ -168,7 +190,26 @@ export default function AdminOperators() {
         {list.length === 0 && !error && <div className="hint">Belum ada akun.</div>}
       </div>
 
+      {authUser.role === "superadmin" && (
+        <div className="card">
+          <div className="section-title">Import Data Unit (PC & HD)</div>
+          <div className="hint" style={{ marginBottom: 8 }}>
+            Import sekali jalan dari data roster (42 PC + 124 HD). Aman diklik berkali-kali —
+            unit yang sudah ada otomatis dilewati, tidak akan dobel.
+          </div>
+          <button className="btn btn-secondary" onClick={handleImportRoster} disabled={importing}>
+            {importing ? "Mengimport..." : "Import Sekarang"}
+          </button>
+          {importResult && (
+            <div className="hint" style={{ marginTop: 8 }}>
+              Fleet (PC): {importResult.fleets.created} baru ditambahkan, {importResult.fleets.skipped} sudah ada (dilewati).<br />
+              Unit (HD): {importResult.units.created} baru ditambahkan, {importResult.units.skipped} sudah ada (dilewati).
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-                        }
+              }
