@@ -100,12 +100,18 @@ export default function Dashboard() {
     );
   }
 
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
   return (
     <div className="container">
       <div className="card header-card">
         <div className="clock" style={{ fontSize: 22 }}>Dashboard Analitik</div>
-        <div className="hint" style={{ textAlign: "center" }}>
-          Login sebagai {authUser.username} ({ROLE_LABEL[authUser.role] || authUser.role})
+        <div className="stat-row" style={{ marginTop: 8 }}>
+          <span>{authUser.username} ({ROLE_LABEL[authUser.role] || authUser.role})</span>
+          <button className="btn-mini-danger" onClick={handleLogout}>Logout</button>
         </div>
         <a href="/" className="hint" style={{ display: "block", textAlign: "center", marginTop: 6 }}>
           Buka Halaman Monitoring
