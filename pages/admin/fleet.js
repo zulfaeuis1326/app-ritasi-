@@ -369,5 +369,4 @@ export default function KelolaFleet() {
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-          }
-            
+                }
