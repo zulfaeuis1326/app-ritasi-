@@ -16,6 +16,7 @@ export default function KelolaFleet() {
   const [unitSearch, setUnitSearch] = useState("");
   const [unitPitFilter, setUnitPitFilter] = useState("");
   const [selectedUnitId, setSelectedUnitId] = useState("");
+  const [selectedFleetId, setSelectedFleetId] = useState("");
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -166,6 +167,8 @@ export default function KelolaFleet() {
     return matchSearch && matchPit;
   });
   const selectedUnit = units.find((u) => String(u.id) === selectedUnitId) || null;
+  const selectedFleet = fleets.find((f) => String(f.id) === selectedFleetId) || null;
+  const selectedFleetMembers = selectedFleet ? units.filter((u) => u.fleet_id === selectedFleet.id) : [];
 
   if (authUser === undefined || authUser === null) {
     return (
@@ -225,31 +228,58 @@ export default function KelolaFleet() {
       </div>
 
       <div className="card">
-        <div className="section-title">Daftar Fleet (PC/Loader) — {fleets.length}</div>
-        {fleets.map((f) => {
-          const members = units.filter((u) => u.fleet_id === f.id);
-          return (
-            <div key={f.id} className="history-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <b>{f.name}</b>
-                <button className="btn-mini-danger" onClick={() => handleDeleteFleet(f.id, f.name)}>Hapus</button>
-              </div>
-              <select
-                value={f.pit_id || ""}
-                onChange={(e) => handleSetFleetPit(f.id, e.target.value)}
-                style={{ marginBottom: 6 }}
-              >
-                <option value="">-- Belum ada PIT --</option>
-                {pits.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <div className="hint">
-                HD gabung ({members.length}): {members.length ? members.map((m) => m.name).join(", ") : "belum ada"}
-              </div>
+        <div className="section-title">Daftar Fleet (PC/Loader)</div>
+        <select
+          value={selectedFleetId}
+          onChange={(e) => setSelectedFleetId(e.target.value)}
+          style={{ marginBottom: 10 }}
+        >
+          <option value="">-- Pilih PC/fleet --</option>
+          {fleets.map((f) => (
+            <option key={f.id} value={f.id}>{f.name} {f.pit_name ? `(${f.pit_name})` : ""}</option>
+          ))}
+        </select>
+
+        {selectedFleet && (
+          <div style={{ padding: 10, background: "var(--surface-alt)", borderRadius: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <b>{selectedFleet.name}</b>
+              <button className="btn-mini-danger" onClick={() => handleDeleteFleet(selectedFleet.id, selectedFleet.name)}>Hapus</button>
             </div>
-          );
-        })}
+            <div className="field-label" style={{ marginBottom: 4 }}>PIT</div>
+            <select
+              value={selectedFleet.pit_id || ""}
+              onChange={(e) => handleSetFleetPit(selectedFleet.id, e.target.value)}
+              style={{ marginBottom: 8 }}
+            >
+              <option value="">-- Belum ada PIT --</option>
+              {pits.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <div className="hint">
+              HD gabung ({selectedFleetMembers.length}): {selectedFleetMembers.length ? selectedFleetMembers.map((m) => m.name).join(", ") : "belum ada"}
+            </div>
+          </div>
+        )}
+
+        <div className="section-title" style={{ marginTop: 4 }}>Ringkasan ({fleets.length} PC)</div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr><th>PC</th><th>PIT</th><th>Jml HD</th></tr>
+            </thead>
+            <tbody>
+              {fleets.map((f) => (
+                <tr key={f.id}>
+                  <td>{f.name}</td>
+                  <td>{f.pit_name || "-"}</td>
+                  <td>{units.filter((u) => u.fleet_id === f.id).length}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {fleets.length === 0 && <div className="hint">Belum ada PC/fleet.</div>}
       </div>
 
