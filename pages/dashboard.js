@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [recap, setRecap] = useState(null);
+  const [showAllUnits, setShowAllUnits] = useState(false);
 
   useEffect(() => {
     function checkAuth() {
@@ -86,6 +87,10 @@ export default function Dashboard() {
     }, 15000);
     return () => clearInterval(poll);
   }, [authUser, loadData, loadRecap]);
+
+  const allRecapUnits = (recap && recap.units) || [];
+  const visibleUnits = showAllUnits ? allRecapUnits : allRecapUnits.filter((u) => u.total > 0);
+  const hiddenUnitCount = allRecapUnits.length - visibleUnits.length;
 
   if (authUser === undefined || authUser === null) {
     return (
@@ -199,6 +204,12 @@ export default function Dashboard() {
         <div className="section-title">Rekap Per Jam - Shift Berjalan (Semua Unit)</div>
         <div className="hint" style={{ marginBottom: 8 }}>
           Kolom jam yang ditandai adalah jam yang sedang berjalan saat ini.
+          {hiddenUnitCount > 0 && !showAllUnits && (
+            <> {hiddenUnitCount} unit belum ada ritasi disembunyikan — <a href="#" onClick={function (e) { e.preventDefault(); setShowAllUnits(true); }}>tampilkan semua</a>.</>
+          )}
+          {showAllUnits && (
+            <> <a href="#" onClick={function (e) { e.preventDefault(); setShowAllUnits(false); }}>sembunyikan unit kosong</a>.</>
+          )}
         </div>
         <div className="table-scroll">
           <table>
@@ -216,7 +227,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {recap && recap.units && recap.units.map(function (u) {
+              {visibleUnits.map(function (u) {
                 return (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 700 }}>{u.name}</td>
@@ -231,8 +242,8 @@ export default function Dashboard() {
                   </tr>
                 );
               })}
-              {recap && (!recap.units || recap.units.length === 0) && (
-                <tr><td colSpan={2} className="hint">Belum ada unit/data di shift ini.</td></tr>
+              {visibleUnits.length === 0 && (
+                <tr><td colSpan={2} className="hint">Belum ada ritasi di shift ini.</td></tr>
               )}
               {recap && (
                 <tr className="total-row">
@@ -266,7 +277,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {recap && recap.units && recap.units.map(function (u) {
+              {visibleUnits.map(function (u) {
                 return (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 700 }}>{u.name}</td>
@@ -277,6 +288,9 @@ export default function Dashboard() {
                   </tr>
                 );
               })}
+              {visibleUnits.length === 0 && (
+                <tr><td colSpan={2 + MATERIALS.length} className="hint">Belum ada ritasi di shift ini.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -286,4 +300,4 @@ export default function Dashboard() {
     </div>
   );
         }
-                    
+        
