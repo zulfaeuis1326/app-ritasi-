@@ -11,7 +11,7 @@ export default function KelolaFleet() {
   const [error, setError] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [selectedKey, setSelectedKey] = useState("");
+  const [selectedUnitId, setSelectedUnitId] = useState("");
 
   const [showAddPit, setShowAddPit] = useState(false);
   const [showAddPc, setShowAddPc] = useState(false);
@@ -95,43 +95,6 @@ export default function KelolaFleet() {
     }
   }
 
-  async function handleDeleteFleet(id, name) {
-    if (!confirm(`Hapus PC "${name}"? Semua HD yang gabung di sini akan dilepas (jadi belum di-assign).`)) return;
-    try {
-      const res = await fetch("/api/fleets", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (res.ok) {
-        setSelectedKey("");
-        await loadAll();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        alert(`Gagal hapus: ${d.error || res.status}`);
-      }
-    } catch (err) {
-      alert(`Gagal hapus (koneksi/server bermasalah): ${err.message}`);
-    }
-  }
-
-  async function handleSetFleetPit(fleetId, pitId) {
-    try {
-      const res = await fetch("/api/fleets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "set_pit", fleetId, pitId: pitId || null }),
-      });
-      if (res.ok) await loadAll();
-      else {
-        const d = await res.json().catch(() => ({}));
-        alert(`Gagal ubah PIT: ${d.error || res.status}`);
-      }
-    } catch (err) {
-      alert(`Gagal ubah PIT (koneksi/server bermasalah): ${err.message}`);
-    }
-  }
-
   async function handleAssignFleet(unitId, fleetId) {
     try {
       const res = await fetch("/api/units", {
@@ -159,10 +122,10 @@ export default function KelolaFleet() {
       if (res.ok) await loadAll();
       else {
         const d = await res.json().catch(() => ({}));
-        alert(`Gagal ubah PIT: ${d.error || res.status}`);
+        alert(`Gagal ubah lokasi: ${d.error || res.status}`);
       }
     } catch (err) {
-      alert(`Gagal ubah PIT (koneksi/server bermasalah): ${err.message}`);
+      alert(`Gagal ubah lokasi (koneksi/server bermasalah): ${err.message}`);
     }
   }
 
@@ -174,35 +137,11 @@ export default function KelolaFleet() {
     );
   }
 
-  // Gabungin PC (fleet) & HD (unit) jadi 1 daftar biar search & tabelnya satu tempat aja.
-  const rows = [
-    ...fleets.map((f) => ({
-      key: "pc-" + f.id,
-      type: "PC",
-      id: f.id,
-      name: f.name,
-      pit_id: f.pit_id,
-      pit_name: f.pit_name,
-      pc_name: null,
-      memberCount: units.filter((u) => u.fleet_id === f.id).length,
-    })),
-    ...units.map((u) => ({
-      key: "hd-" + u.id,
-      type: "HD",
-      id: u.id,
-      name: u.name,
-      pit_id: u.pit_id,
-      pit_name: u.pit_name,
-      pc_name: u.fleet_name,
-      fleet_id: u.fleet_id,
-    })),
-  ];
-
-  const filteredRows = search.trim()
-    ? rows.filter((r) => r.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : rows;
-
-  const selected = rows.find((r) => r.key === selectedKey) || null;
+  // Cuma unit HD yang dicocokin ke search (PC diatur lewat form tambah/pilih terpisah di bawah).
+  const filteredUnits = search.trim()
+    ? units.filter((u) => u.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : units;
+  const selectedUnit = units.find((u) => String(u.id) === selectedUnitId) || null;
 
   return (
     <div className="container">
@@ -218,113 +157,52 @@ export default function KelolaFleet() {
       )}
 
       <div className="card">
-        <div className="section-title">Cari Unit (PC atau HD)</div>
+        <div className="section-title">Unit Hauler → Masuk PC Berapa, Lokasi Mana</div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Ketik nomor unit, misal H572 atau E520..."
+          placeholder="Cari unit, misal H572..."
+          style={{ marginBottom: 8 }}
         />
-      </div>
-
-      {selected && (
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div>
-              <span className={selected.type === "PC" ? "badge badge-pc" : "badge badge-hd"}>{selected.type}</span>
-              <b style={{ marginLeft: 8, fontSize: 15 }}>{selected.name}</b>
-            </div>
-            {selected.type === "PC" && (
-              <button className="btn-mini-danger" onClick={() => handleDeleteFleet(selected.id, selected.name)}>Hapus</button>
-            )}
-          </div>
-
-          <div className="field-label" style={{ marginBottom: 4 }}>PIT</div>
-          <select
-            value={selected.pit_id || ""}
-            onChange={(e) =>
-              selected.type === "PC"
-                ? handleSetFleetPit(selected.id, e.target.value)
-                : handleSetUnitPit(selected.id, e.target.value)
-            }
-            style={{ marginBottom: selected.type === "HD" ? 10 : 0 }}
-          >
-            <option value="">-- Belum ada PIT --</option>
-            {pits.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-
-          {selected.type === "HD" && (
-            <>
-              <div className="field-label" style={{ marginBottom: 4 }}>PC (Fleet)</div>
-              <select
-                value={selected.fleet_id || ""}
-                onChange={(e) => handleAssignFleet(selected.id, e.target.value)}
-              >
-                <option value="">-- Belum gabung PC --</option>
-                {fleets.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </>
-          )}
-
-          {selected.type === "PC" && (
-            <div className="hint" style={{ marginTop: 8 }}>{selected.memberCount} HD gabung di PC ini.</div>
-          )}
-        </div>
-      )}
-
-      <div className="card">
-        <div className="section-title">
-          Daftar Unit ({filteredRows.length}/{rows.length})
-        </div>
-        <div className="table-scroll">
-          <table className="list-table">
-            <thead>
-              <tr><th>Unit</th><th>Tipe</th><th>PIT</th><th>PC</th></tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((r) => (
-                <tr
-                  key={r.key}
-                  className={r.key === selectedKey ? "row-selected" : ""}
-                  onClick={() => setSelectedKey(r.key)}
-                >
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td><span className={r.type === "PC" ? "badge badge-pc" : "badge badge-hd"}>{r.type}</span></td>
-                  <td>{r.pit_name || "-"}</td>
-                  <td>{r.type === "PC" ? "-" : (r.pc_name || "-")}</td>
-                </tr>
-              ))}
-              {filteredRows.length === 0 && (
-                <tr><td colSpan={4} className="hint">Gak ada unit yang cocok.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <button
-          className="btn btn-secondary"
-          style={{ marginBottom: showAddPit ? 10 : 0 }}
-          onClick={() => setShowAddPit(!showAddPit)}
+        <select
+          value={selectedUnitId}
+          onChange={(e) => setSelectedUnitId(e.target.value)}
         >
-          {showAddPit ? "Batal" : "+ Tambah Lokasi PIT Baru"}
-        </button>
-        {showAddPit && (
-          <form onSubmit={handleAddPit} style={{ display: "flex", gap: 8 }}>
-            <input
-              value={newPitName}
-              onChange={(e) => setNewPitName(e.target.value)}
-              placeholder="Contoh: PIT BARU"
-              style={{ flex: 1 }}
-            />
-            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }}>
-              Simpan
-            </button>
-          </form>
+          <option value="">-- Pilih unit HD --</option>
+          {filteredUnits.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name} {u.fleet_name ? `→ ${u.fleet_name}` : ""} {u.pit_name ? `(${u.pit_name})` : ""}
+            </option>
+          ))}
+        </select>
+
+        {selectedUnit && (
+          <div style={{ padding: 10, background: "var(--surface-alt)", borderRadius: 8, marginTop: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>{selectedUnit.name}</div>
+
+            <div className="field-label" style={{ marginBottom: 4 }}>Masuk PC (Fleet)</div>
+            <select
+              value={selectedUnit.fleet_id || ""}
+              onChange={(e) => handleAssignFleet(selectedUnit.id, e.target.value)}
+              style={{ marginBottom: 10 }}
+            >
+              <option value="">-- Belum gabung PC --</option>
+              {fleets.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+
+            <div className="field-label" style={{ marginBottom: 4 }}>Lokasi (PIT)</div>
+            <select
+              value={selectedUnit.pit_id || ""}
+              onChange={(e) => handleSetUnitPit(selectedUnit.id, e.target.value)}
+            >
+              <option value="">-- Belum ada lokasi --</option>
+              {pits.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 
@@ -344,7 +222,7 @@ export default function KelolaFleet() {
               placeholder="Contoh: E52099"
             />
             <select value={newFleetPit} onChange={(e) => setNewFleetPit(e.target.value)}>
-              <option value="">-- Tanpa PIT dulu --</option>
+              <option value="">-- Tanpa lokasi dulu --</option>
               {pits.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -356,8 +234,31 @@ export default function KelolaFleet() {
         )}
       </div>
 
+      <div className="card">
+        <button
+          className="btn btn-secondary"
+          style={{ marginBottom: showAddPit ? 10 : 0 }}
+          onClick={() => setShowAddPit(!showAddPit)}
+        >
+          {showAddPit ? "Batal" : "+ Tambah Lokasi Baru"}
+        </button>
+        {showAddPit && (
+          <form onSubmit={handleAddPit} style={{ display: "flex", gap: 8 }}>
+            <input
+              value={newPitName}
+              onChange={(e) => setNewPitName(e.target.value)}
+              placeholder="Contoh: PIT BARU"
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }}>
+              Simpan
+            </button>
+          </form>
+        )}
+      </div>
+
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-        }
-                  
+          }
+                
