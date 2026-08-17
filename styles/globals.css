@@ -167,21 +167,10 @@ select:focus, input:focus {
   outline-offset: 1px;
 }
 
-/* Search + dropdown yang selalu sepasang, dibikin nempel jadi 1 kesatuan visual
-   (bukan 2 kotak terpisah) — search di atas, dropdown langsung di bawahnya. */
+/* Combobox 1 kotak (input + datalist bawaan browser) — styling sama kayak input biasa,
+   browser yang urus munculin daftar sarannya sendiri pas diketik/di-tap. */
 .searchable-select {
   margin-bottom: 10px;
-}
-.searchable-select input {
-  border-radius: 8px 8px 0 0;
-  margin-bottom: 0;
-  border-bottom: none;
-  position: relative;
-  z-index: 1;
-}
-.searchable-select select {
-  border-radius: 0 0 8px 8px;
-  margin-bottom: 0;
 }
 
 .material-grid {
@@ -548,4 +537,4 @@ a { color: var(--accent); }
   font-size: 13.5px;
   color: var(--text-muted);
   margin-top: 22px;
-}
+  }
