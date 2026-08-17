@@ -2,6 +2,31 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { atLeast } from "../../lib/roles";
 
+// Search + dropdown yang selalu sepasang jadi 1 grup — dipakai berulang buat
+// pilih unit, pilih PC, dan pilih lokasi, biar konsisten di semua tempat.
+function SearchableSelect({ value, onChange, options, searchPlaceholder, emptyLabel, disabled }) {
+  const [q, setQ] = useState("");
+  const filtered = q.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()))
+    : options;
+  return (
+    <div className="searchable-select">
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={searchPlaceholder}
+        disabled={disabled}
+      />
+      <select value={value} onChange={onChange} disabled={disabled}>
+        <option value="">{emptyLabel}</option>
+        {filtered.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function KelolaFleet() {
   const router = useRouter();
   const [authUser, setAuthUser] = useState(undefined);
@@ -10,7 +35,6 @@ export default function KelolaFleet() {
   const [pits, setPits] = useState([]);
   const [error, setError] = useState(null);
 
-  const [search, setSearch] = useState("");
   const [selectedUnitId, setSelectedUnitId] = useState("");
 
   const [showAddPit, setShowAddPit] = useState(false);
@@ -137,10 +161,13 @@ export default function KelolaFleet() {
     );
   }
 
-  // Cuma unit HD yang dicocokin ke search (PC diatur lewat form tambah/pilih terpisah di bawah).
-  const filteredUnits = search.trim()
-    ? units.filter((u) => u.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : units;
+  const unitOptions = units.map((u) => ({
+    value: String(u.id),
+    label: `${u.name}${u.fleet_name ? " → " + u.fleet_name : ""}${u.pit_name ? " (" + u.pit_name + ")" : ""}`,
+  }));
+  const fleetOptions = fleets.map((f) => ({ value: String(f.id), label: f.name }));
+  const pitOptions = pits.map((p) => ({ value: String(p.id), label: p.name }));
+
   const selectedUnit = units.find((u) => String(u.id) === selectedUnitId) || null;
 
   return (
@@ -158,50 +185,36 @@ export default function KelolaFleet() {
 
       <div className="card">
         <div className="section-title">Unit Hauler → Masuk PC Berapa, Lokasi Mana</div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari unit, misal H572..."
-          style={{ marginBottom: 8 }}
-        />
-        <select
+        <div className="field-label" style={{ marginBottom: 4 }}>Unit</div>
+        <SearchableSelect
           value={selectedUnitId}
           onChange={(e) => setSelectedUnitId(e.target.value)}
-        >
-          <option value="">-- Pilih unit HD --</option>
-          {filteredUnits.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name} {u.fleet_name ? `→ ${u.fleet_name}` : ""} {u.pit_name ? `(${u.pit_name})` : ""}
-            </option>
-          ))}
-        </select>
+          options={unitOptions}
+          searchPlaceholder="Cari unit, misal H572..."
+          emptyLabel="-- Pilih unit HD --"
+        />
 
         {selectedUnit && (
           <div style={{ padding: 10, background: "var(--surface-alt)", borderRadius: 8, marginTop: 10 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>{selectedUnit.name}</div>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>{selectedUnit.name}</div>
 
             <div className="field-label" style={{ marginBottom: 4 }}>Masuk PC (Fleet)</div>
-            <select
-              value={selectedUnit.fleet_id || ""}
+            <SearchableSelect
+              value={selectedUnit.fleet_id ? String(selectedUnit.fleet_id) : ""}
               onChange={(e) => handleAssignFleet(selectedUnit.id, e.target.value)}
-              style={{ marginBottom: 10 }}
-            >
-              <option value="">-- Belum gabung PC --</option>
-              {fleets.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
+              options={fleetOptions}
+              searchPlaceholder="Cari PC, misal E520..."
+              emptyLabel="-- Belum gabung PC --"
+            />
 
-            <div className="field-label" style={{ marginBottom: 4 }}>Lokasi (PIT)</div>
-            <select
-              value={selectedUnit.pit_id || ""}
+            <div className="field-label" style={{ marginBottom: 4, marginTop: 10 }}>Lokasi (PIT)</div>
+            <SearchableSelect
+              value={selectedUnit.pit_id ? String(selectedUnit.pit_id) : ""}
               onChange={(e) => handleSetUnitPit(selectedUnit.id, e.target.value)}
-            >
-              <option value="">-- Belum ada lokasi --</option>
-              {pits.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              options={pitOptions}
+              searchPlaceholder="Cari lokasi..."
+              emptyLabel="-- Belum ada lokasi --"
+            />
           </div>
         )}
       </div>
@@ -215,19 +228,23 @@ export default function KelolaFleet() {
           {showAddPc ? "Batal" : "+ Tambah PC / Loader Baru"}
         </button>
         {showAddPc && (
-          <form onSubmit={handleAddFleet} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <form onSubmit={handleAddFleet}>
+            <div className="field-label" style={{ marginBottom: 4 }}>Nama PC</div>
             <input
               value={newFleetName}
               onChange={(e) => setNewFleetName(e.target.value)}
               placeholder="Contoh: E52099"
+              style={{ marginBottom: 10 }}
             />
-            <select value={newFleetPit} onChange={(e) => setNewFleetPit(e.target.value)}>
-              <option value="">-- Tanpa lokasi dulu --</option>
-              {pits.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }}>
+            <div className="field-label" style={{ marginBottom: 4 }}>Lokasi (PIT)</div>
+            <SearchableSelect
+              value={newFleetPit}
+              onChange={(e) => setNewFleetPit(e.target.value)}
+              options={pitOptions}
+              searchPlaceholder="Cari lokasi..."
+              emptyLabel="-- Tanpa lokasi dulu --"
+            />
+            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px", marginTop: 10 }}>
               Simpan
             </button>
           </form>
@@ -260,5 +277,4 @@ export default function KelolaFleet() {
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-          }
-                
+            }
