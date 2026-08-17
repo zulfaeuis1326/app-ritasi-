@@ -167,6 +167,23 @@ select:focus, input:focus {
   outline-offset: 1px;
 }
 
+/* Search + dropdown yang selalu sepasang, dibikin nempel jadi 1 kesatuan visual
+   (bukan 2 kotak terpisah) — search di atas, dropdown langsung di bawahnya. */
+.searchable-select {
+  margin-bottom: 10px;
+}
+.searchable-select input {
+  border-radius: 8px 8px 0 0;
+  margin-bottom: 0;
+  border-bottom: none;
+  position: relative;
+  z-index: 1;
+}
+.searchable-select select {
+  border-radius: 0 0 8px 8px;
+  margin-bottom: 0;
+}
+
 .material-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
