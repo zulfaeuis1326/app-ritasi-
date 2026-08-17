@@ -97,6 +97,8 @@ export default function AdminOperators() {
 
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [deduping, setDeduping] = useState(false);
+  const [dedupeResult, setDedupeResult] = useState(null);
 
   async function handleImportRoster() {
     if (!confirm("Import 42 PC + 124 HD dari data roster ke database? Aman diulang (yang udah ada dilewati, gak dobel).")) return;
@@ -114,6 +116,25 @@ export default function AdminOperators() {
       alert(`Gagal import (koneksi/server bermasalah): ${err.message}`);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleDedupe() {
+    if (!confirm("Gabungin unit/PC yang namanya sama (dobel karena beda kapitalisasi/spasi)? Data fleet & PIT yang udah keisi otomatis dipertahankan.")) return;
+    setDeduping(true);
+    setDedupeResult(null);
+    try {
+      const res = await fetch("/api/admin/dedupe-units", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setDedupeResult(data);
+      } else {
+        alert(`Gagal bersihin: ${data.error || res.status}`);
+      }
+    } catch (err) {
+      alert(`Gagal bersihin (koneksi/server bermasalah): ${err.message}`);
+    } finally {
+      setDeduping(false);
     }
   }
 
@@ -209,7 +230,26 @@ export default function AdminOperators() {
         </div>
       )}
 
+      {authUser.role === "superadmin" && (
+        <div className="card">
+          <div className="section-title">Bersihkan Unit Dobel</div>
+          <div className="hint" style={{ marginBottom: 8 }}>
+            Gabungin unit/PC yang namanya sama tapi kecatat dobel (beda kapitalisasi/spasi).
+            Data fleet & PIT yang udah keisi otomatis dipertahankan, gak hilang.
+          </div>
+          <button className="btn btn-secondary" onClick={handleDedupe} disabled={deduping}>
+            {deduping ? "Membersihkan..." : "Bersihkan Sekarang"}
+          </button>
+          {dedupeResult && (
+            <div className="hint" style={{ marginTop: 8 }}>
+              {dedupeResult.fleetsMerged} PC digabung, {dedupeResult.unitsMerged} unit HD digabung.
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-              }
+                    }
+        
