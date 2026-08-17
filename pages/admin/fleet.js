@@ -2,27 +2,42 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { atLeast } from "../../lib/roles";
 
-// Search + dropdown yang selalu sepasang jadi 1 grup — dipakai berulang buat
-// pilih unit, pilih PC, dan pilih lokasi, biar konsisten di semua tempat.
-function SearchableSelect({ value, onChange, options, searchPlaceholder, emptyLabel, disabled }) {
-  const [q, setQ] = useState("");
-  const filtered = q.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()))
-    : options;
+// Combobox 1 kotak: ketik buat nyaring, tap buat pilih — pakai <datalist> bawaan browser
+// (bukan 2 elemen kepisah). listId wajib unik per pemakaian di halaman yang sama.
+function SearchableSelect({ value, onChange, options, placeholder, listId }) {
+  const current = options.find((o) => o.value === value);
+  const [text, setText] = useState(current ? current.label : "");
+
+  useEffect(() => {
+    const opt = options.find((o) => o.value === value);
+    setText(opt ? opt.label : "");
+  }, [value, options]);
+
+  function handleChange(e) {
+    const typed = e.target.value;
+    setText(typed);
+    if (typed === "") {
+      onChange("");
+      return;
+    }
+    const match = options.find((o) => o.label === typed);
+    if (match) onChange(match.value);
+  }
+
   return (
     <div className="searchable-select">
       <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={searchPlaceholder}
-        disabled={disabled}
+        list={listId}
+        value={text}
+        onChange={handleChange}
+        placeholder={placeholder}
+        autoComplete="off"
       />
-      <select value={value} onChange={onChange} disabled={disabled}>
-        <option value="">{emptyLabel}</option>
-        {filtered.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+      <datalist id={listId}>
+        {options.map((o) => (
+          <option key={o.value} value={o.label} />
         ))}
-      </select>
+      </datalist>
     </div>
   );
 }
@@ -188,10 +203,10 @@ export default function KelolaFleet() {
         <div className="field-label" style={{ marginBottom: 4 }}>Unit</div>
         <SearchableSelect
           value={selectedUnitId}
-          onChange={(e) => setSelectedUnitId(e.target.value)}
+          onChange={(val) => setSelectedUnitId(val)}
           options={unitOptions}
-          searchPlaceholder="Cari unit, misal H572..."
-          emptyLabel="-- Pilih unit HD --"
+          placeholder="Ketik buat cari unit, misal H572..."
+          listId="dl-unit"
         />
 
         {selectedUnit && (
@@ -201,19 +216,19 @@ export default function KelolaFleet() {
             <div className="field-label" style={{ marginBottom: 4 }}>Masuk PC (Fleet)</div>
             <SearchableSelect
               value={selectedUnit.fleet_id ? String(selectedUnit.fleet_id) : ""}
-              onChange={(e) => handleAssignFleet(selectedUnit.id, e.target.value)}
+              onChange={(val) => handleAssignFleet(selectedUnit.id, val)}
               options={fleetOptions}
-              searchPlaceholder="Cari PC, misal E520..."
-              emptyLabel="-- Belum gabung PC --"
+              placeholder="Ketik buat cari PC, misal E520..."
+              listId="dl-pc"
             />
 
             <div className="field-label" style={{ marginBottom: 4, marginTop: 10 }}>Lokasi (PIT)</div>
             <SearchableSelect
               value={selectedUnit.pit_id ? String(selectedUnit.pit_id) : ""}
-              onChange={(e) => handleSetUnitPit(selectedUnit.id, e.target.value)}
+              onChange={(val) => handleSetUnitPit(selectedUnit.id, val)}
               options={pitOptions}
-              searchPlaceholder="Cari lokasi..."
-              emptyLabel="-- Belum ada lokasi --"
+              placeholder="Ketik buat cari lokasi..."
+              listId="dl-pit-unit"
             />
           </div>
         )}
@@ -239,10 +254,10 @@ export default function KelolaFleet() {
             <div className="field-label" style={{ marginBottom: 4 }}>Lokasi (PIT)</div>
             <SearchableSelect
               value={newFleetPit}
-              onChange={(e) => setNewFleetPit(e.target.value)}
+              onChange={(val) => setNewFleetPit(val)}
               options={pitOptions}
-              searchPlaceholder="Cari lokasi..."
-              emptyLabel="-- Tanpa lokasi dulu --"
+              placeholder="Ketik buat cari lokasi..."
+              listId="dl-pit-newpc"
             />
             <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px", marginTop: 10 }}>
               Simpan
@@ -277,4 +292,4 @@ export default function KelolaFleet() {
       <div className="app-footer">designed by Najib.dev</div>
     </div>
   );
-            }
+}
