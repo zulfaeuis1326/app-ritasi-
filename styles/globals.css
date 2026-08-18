@@ -167,10 +167,126 @@ select:focus, input:focus {
   outline-offset: 1px;
 }
 
-/* Combobox 1 kotak (input + datalist bawaan browser) — styling sama kayak input biasa,
-   browser yang urus munculin daftar sarannya sendiri pas diketik/di-tap. */
-.searchable-select {
-  margin-bottom: 10px;
+/* ===== Combobox modern (klik buka panel, ada search + list) ===== */
+.combobox {
+  position: relative;
+}
+
+.combobox-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-align: left;
+}
+.combobox-trigger:active { border-color: var(--accent); }
+.combobox-value { color: var(--text); }
+.combobox-placeholder { color: var(--text-muted); }
+.combobox-trigger svg { flex-shrink: 0; color: var(--text-muted); }
+
+.combobox-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.combobox-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.combobox-search-row svg { flex-shrink: 0; }
+.combobox-search {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+  font-family: var(--font-body);
+  padding: 0;
+}
+
+.combobox-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.combobox-option {
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.combobox-option:last-child { border-bottom: none; }
+.combobox-option:hover { background: var(--accent-soft); }
+.combobox-option-active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.combobox-option-muted { color: var(--text-muted); font-style: italic; }
+.combobox-empty {
+  padding: 16px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.fleet-detail-panel {
+  padding: 14px;
+  background: var(--surface-alt);
+  border-radius: 10px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+}
+.fleet-detail-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.add-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.add-toggle-chevron { display: flex; transition: transform 0.15s ease; }
+.add-toggle-chevron-open { transform: rotate(180deg); }
+
+.add-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .material-grid {
@@ -537,4 +653,4 @@ a { color: var(--accent); }
   font-size: 13.5px;
   color: var(--text-muted);
   margin-top: 22px;
-  }
+}
