@@ -1,43 +1,107 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import { atLeast } from "../../lib/roles";
 
-// Combobox 1 kotak: ketik buat nyaring, tap buat pilih — pakai <datalist> bawaan browser
-// (bukan 2 elemen kepisah). listId wajib unik per pemakaian di halaman yang sama.
-function SearchableSelect({ value, onChange, options, placeholder, listId }) {
+function ChevronIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+// Combobox modern: tap buat buka panel, di panel ada search + list yang bisa di-scroll.
+// Bukan dropdown bawaan browser.
+function Combobox({ value, onChange, options, placeholder, emptyLabel }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+
   const current = options.find((o) => o.value === value);
-  const [text, setText] = useState(current ? current.label : "");
 
   useEffect(() => {
-    const opt = options.find((o) => o.value === value);
-    setText(opt ? opt.label : "");
-  }, [value, options]);
-
-  function handleChange(e) {
-    const typed = e.target.value;
-    setText(typed);
-    if (typed === "") {
-      onChange("");
-      return;
+    function onClickOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery("");
+      }
     }
-    const match = options.find((o) => o.label === typed);
-    if (match) onChange(match.value);
+    document.addEventListener("mousedown", onClickOutside);
+    document.addEventListener("touchstart", onClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("touchstart", onClickOutside);
+    };
+  }, []);
+
+  function openPanel() {
+    setOpen(true);
+    setQuery("");
+    setTimeout(() => inputRef.current && inputRef.current.focus(), 60);
   }
 
+  function pick(opt) {
+    onChange(opt ? opt.value : "");
+    setOpen(false);
+    setQuery("");
+  }
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
   return (
-    <div className="searchable-select">
-      <input
-        list={listId}
-        value={text}
-        onChange={handleChange}
-        placeholder={placeholder}
-        autoComplete="off"
-      />
-      <datalist id={listId}>
-        {options.map((o) => (
-          <option key={o.value} value={o.label} />
-        ))}
-      </datalist>
+    <div className="combobox" ref={wrapRef}>
+      <button type="button" className="combobox-trigger" onClick={openPanel}>
+        <span className={current ? "combobox-value" : "combobox-placeholder"}>
+          {current ? current.label : (placeholder || "Pilih...")}
+        </span>
+        <ChevronIcon />
+      </button>
+
+      {open && (
+        <div className="combobox-panel">
+          <div className="combobox-search-row">
+            <SearchIcon />
+            <input
+              ref={inputRef}
+              className="combobox-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={placeholder}
+            />
+          </div>
+          <div className="combobox-list">
+            {emptyLabel && (
+              <div className="combobox-option combobox-option-muted" onClick={() => pick(null)}>
+                {emptyLabel}
+              </div>
+            )}
+            {filtered.map((o) => (
+              <div
+                key={o.value}
+                className={"combobox-option" + (o.value === value ? " combobox-option-active" : "")}
+                onClick={() => pick(o)}
+              >
+                {o.label}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="combobox-empty">Gak ada yang cocok</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -200,91 +264,86 @@ export default function KelolaFleet() {
 
       <div className="card">
         <div className="section-title">Unit Hauler → Masuk PC Berapa, Lokasi Mana</div>
-        <div className="field-label" style={{ marginBottom: 4 }}>Unit</div>
-        <SearchableSelect
+        <div className="field-label" style={{ marginBottom: 6 }}>Unit</div>
+        <Combobox
           value={selectedUnitId}
-          onChange={(val) => setSelectedUnitId(val)}
+          onChange={setSelectedUnitId}
           options={unitOptions}
-          placeholder="Ketik buat cari unit, misal H572..."
-          listId="dl-unit"
+          placeholder="Cari unit, misal H572..."
         />
 
         {selectedUnit && (
-          <div style={{ padding: 10, background: "var(--surface-alt)", borderRadius: 8, marginTop: 10 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>{selectedUnit.name}</div>
+          <div className="fleet-detail-panel">
+            <div className="fleet-detail-title">{selectedUnit.name}</div>
 
-            <div className="field-label" style={{ marginBottom: 4 }}>Masuk PC (Fleet)</div>
-            <SearchableSelect
+            <div className="field-label" style={{ marginBottom: 6 }}>Masuk PC (Fleet)</div>
+            <Combobox
               value={selectedUnit.fleet_id ? String(selectedUnit.fleet_id) : ""}
               onChange={(val) => handleAssignFleet(selectedUnit.id, val)}
               options={fleetOptions}
-              placeholder="Ketik buat cari PC, misal E520..."
-              listId="dl-pc"
+              placeholder="Cari PC, misal E520..."
+              emptyLabel="-- Belum gabung PC --"
             />
 
-            <div className="field-label" style={{ marginBottom: 4, marginTop: 10 }}>Lokasi (PIT)</div>
-            <SearchableSelect
+            <div className="field-label" style={{ marginBottom: 6, marginTop: 12 }}>Lokasi (PIT)</div>
+            <Combobox
               value={selectedUnit.pit_id ? String(selectedUnit.pit_id) : ""}
               onChange={(val) => handleSetUnitPit(selectedUnit.id, val)}
               options={pitOptions}
-              placeholder="Ketik buat cari lokasi..."
-              listId="dl-pit-unit"
+              placeholder="Cari lokasi..."
+              emptyLabel="-- Belum ada lokasi --"
             />
           </div>
         )}
       </div>
 
       <div className="card">
-        <button
-          className="btn btn-secondary"
-          style={{ marginBottom: showAddPc ? 10 : 0 }}
-          onClick={() => setShowAddPc(!showAddPc)}
-        >
-          {showAddPc ? "Batal" : "+ Tambah PC / Loader Baru"}
+        <button className="add-toggle-btn" onClick={() => setShowAddPc(!showAddPc)}>
+          <span>+ Tambah PC / Loader Baru</span>
+          <span className={"add-toggle-chevron" + (showAddPc ? " add-toggle-chevron-open" : "")}>
+            <ChevronIcon />
+          </span>
         </button>
         {showAddPc && (
-          <form onSubmit={handleAddFleet}>
-            <div className="field-label" style={{ marginBottom: 4 }}>Nama PC</div>
+          <form onSubmit={handleAddFleet} className="add-form">
+            <div className="field-label" style={{ marginBottom: 6 }}>Nama PC</div>
             <input
+              className="field-input"
               value={newFleetName}
               onChange={(e) => setNewFleetName(e.target.value)}
               placeholder="Contoh: E52099"
-              style={{ marginBottom: 10 }}
+              style={{ marginBottom: 12 }}
             />
-            <div className="field-label" style={{ marginBottom: 4 }}>Lokasi (PIT)</div>
-            <SearchableSelect
+            <div className="field-label" style={{ marginBottom: 6 }}>Lokasi (PIT)</div>
+            <Combobox
               value={newFleetPit}
-              onChange={(val) => setNewFleetPit(val)}
+              onChange={setNewFleetPit}
               options={pitOptions}
-              placeholder="Ketik buat cari lokasi..."
-              listId="dl-pit-newpc"
+              placeholder="Cari lokasi..."
+              emptyLabel="-- Tanpa lokasi dulu --"
             />
-            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px", marginTop: 10 }}>
-              Simpan
-            </button>
+            <button className="auth-submit" style={{ marginTop: 12 }}>Simpan PC</button>
           </form>
         )}
       </div>
 
       <div className="card">
-        <button
-          className="btn btn-secondary"
-          style={{ marginBottom: showAddPit ? 10 : 0 }}
-          onClick={() => setShowAddPit(!showAddPit)}
-        >
-          {showAddPit ? "Batal" : "+ Tambah Lokasi Baru"}
+        <button className="add-toggle-btn" onClick={() => setShowAddPit(!showAddPit)}>
+          <span>+ Tambah Lokasi Baru</span>
+          <span className={"add-toggle-chevron" + (showAddPit ? " add-toggle-chevron-open" : "")}>
+            <ChevronIcon />
+          </span>
         </button>
         {showAddPit && (
-          <form onSubmit={handleAddPit} style={{ display: "flex", gap: 8 }}>
+          <form onSubmit={handleAddPit} className="add-form">
             <input
+              className="field-input"
               value={newPitName}
               onChange={(e) => setNewPitName(e.target.value)}
               placeholder="Contoh: PIT BARU"
-              style={{ flex: 1 }}
+              style={{ marginBottom: 12 }}
             />
-            <button className="btn btn-secondary" style={{ width: "auto", padding: "0 16px" }}>
-              Simpan
-            </button>
+            <button className="auth-submit">Simpan Lokasi</button>
           </form>
         )}
       </div>
@@ -293,3 +352,4 @@ export default function KelolaFleet() {
     </div>
   );
 }
+  
